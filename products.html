@@ -245,7 +245,7 @@ let realtimeReloadTimer = null;
 async function init() {
   const session = await auth.init();
   if (!session) { window.location.href = 'login.html'; return; }
-  if (!auth.hasRole('admin')) { window.location.href = auth.hasRole('cashier') ? 'pos.html' : 'inventory.html'; return; }
+  if (!auth.hasRole('admin', 'staff')) { window.location.href = 'pos.html'; return; }
   rbac.updateUI();
   const av = document.getElementById('user-avatar-letter');
   if (av) av.textContent = (auth.currentProfile?.full_name || 'U')[0].toUpperCase();

@@ -19,7 +19,7 @@ export const PERMISSIONS = {
   'sales.view': ['admin', 'staff'],
 
   // Products
-  'products.view': ['admin'],
+  'products.view': ['admin', 'staff'],
   'products.create': ['admin'],
   'products.edit': ['admin'],
   'products.delete': ['admin'],

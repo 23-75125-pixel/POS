@@ -178,7 +178,7 @@ ph-pos/
 | Role     | Access |
 |----------|--------|
 | Admin    | Everything across all 4 stores |
-| Staff    | Inventory + Sales History for assigned stores |
+| Staff    | Products + Inventory + Sales History for assigned stores |
 | Cashier  | POS only — open session, sell, print receipt |
 
 ---

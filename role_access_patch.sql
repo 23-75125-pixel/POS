@@ -1,6 +1,6 @@
 -- Apply updated role access matrix
 -- Admin: full access
--- Staff: inventory + sales history
+-- Staff: products + inventory + sales history
 -- Cashier: POS only
 
 -- CATEGORIES policies
