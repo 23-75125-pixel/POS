@@ -80,6 +80,7 @@
     <div class="nav-section-label" data-role="admin">Admin</div>
     <a href="users.html" class="nav-item" id="nav-users" data-role="admin"><i class="bi bi-people"></i> Users</a>
     <a href="settings.html" class="nav-item" id="nav-settings" data-role="admin"><i class="bi bi-gear"></i> Settings</a>
+    <a href="#" class="nav-item" onclick="handleLogout(); return false;"><i class="bi bi-box-arrow-right"></i> Sign Out</a>
   </nav>
   <div class="sidebar-footer">
     <div class="user-info"><div class="user-avatar" id="user-avatar-letter">U</div><div class="user-details"><div class="user-name" data-user-name>Loading...</div><div class="user-role" data-user-role>User</div></div></div>
@@ -294,20 +295,28 @@ function scheduleReportsRealtimeRefresh() {
 }
 
 function setupRealtime() {
-  if (!auth.currentStore?.id) return;
   if (realtimeChannel) db.removeChannel(realtimeChannel);
 
+  const isAdmin = auth.hasRole('admin');
+  const storeId = auth.currentStore?.id;
+  if (!isAdmin && !storeId) return;
+
+  const channelName = isAdmin ? 'reports-live-all' : `reports-live-${storeId}`;
   realtimeChannel = db
-    .channel(`reports-live-${auth.currentStore.id}`)
+    .channel(channelName)
     .on(
       'postgres_changes',
-      { event: '*', schema: 'public', table: 'sales', filter: `store_id=eq.${auth.currentStore.id}` },
+      isAdmin
+        ? { event: '*', schema: 'public', table: 'sales' }
+        : { event: '*', schema: 'public', table: 'sales', filter: `store_id=eq.${storeId}` },
       scheduleReportsRealtimeRefresh
     )
     .on('postgres_changes', { event: '*', schema: 'public', table: 'sale_items' }, scheduleReportsRealtimeRefresh)
     .on(
       'postgres_changes',
-      { event: '*', schema: 'public', table: 'store_products', filter: `store_id=eq.${auth.currentStore.id}` },
+      isAdmin
+        ? { event: '*', schema: 'public', table: 'store_products' }
+        : { event: '*', schema: 'public', table: 'store_products', filter: `store_id=eq.${storeId}` },
       scheduleReportsRealtimeRefresh
     )
     .subscribe();
@@ -335,10 +344,10 @@ window.setRange = function(range, reload = true) {
 };
 
 window.loadReports = async function() {
-  const storeId = auth.currentStore?.id;
+  const storeId = auth.hasRole('admin') ? null : auth.currentStore?.id;
   const dateFrom = document.getElementById('date-from').value;
   const dateTo = document.getElementById('date-to').value;
-  if (!storeId || !dateFrom || !dateTo) return;
+  if (!dateFrom || !dateTo) return;
 
   try {
     showLoading('Generating report...');

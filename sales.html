@@ -28,6 +28,7 @@
     <div class="nav-section-label" data-role="admin">Admin</div>
     <a href="users.html" class="nav-item" id="nav-users" data-role="admin"><i class="bi bi-people"></i> Users</a>
     <a href="settings.html" class="nav-item" id="nav-settings" data-role="admin"><i class="bi bi-gear"></i> Settings</a>
+    <a href="#" class="nav-item" onclick="handleLogout(); return false;"><i class="bi bi-box-arrow-right"></i> Sign Out</a>
   </nav>
   <div class="sidebar-footer">
     <div class="user-info"><div class="user-avatar" id="user-avatar-letter">U</div><div class="user-details"><div class="user-name" data-user-name>Loading...</div><div class="user-role" data-user-role>User</div></div></div>
@@ -222,6 +223,16 @@ async function init() {
     document.getElementById('txn-search').value = params.get('txn');
   }
 
+  const txnSearchEl = document.getElementById('txn-search');
+  if (txnSearchEl) {
+    txnSearchEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        loadSales();
+      }
+    });
+  }
+
   await loadSales();
   setupRealtime();
 }
@@ -267,8 +278,8 @@ window.loadSales = async function() {
       .order('created_at', { ascending: false })
       .limit(300);
 
-    if (dateFrom) q = q.gte('created_at', dateFrom + 'T00:00:00');
-    if (dateTo) q = q.lte('created_at', dateTo + 'T23:59:59');
+    if (dateFrom) q = q.gte('created_at', dateFrom + 'T00:00:00+08:00');
+    if (dateTo) q = q.lte('created_at', dateTo + 'T23:59:59+08:00');
     if (status) q = q.eq('status', status);
     if (txnSearch) q = q.ilike('txn_no', '%' + txnSearch + '%');
 
@@ -338,7 +349,6 @@ window.viewSale = async function(saleId) {
           <div class="mb-1"><strong>Cashier:</strong> ${s.profiles?.full_name || '—'}</div>
           <div class="mb-1"><strong>Store:</strong> ${s.stores?.name || auth.currentStore?.name || '—'}</div>
           ${s.customer_name ? `<div class="mb-1"><strong>Customer:</strong> ${s.customer_name}</div>` : ''}
-          ${s.is_senior ? `<div class="mb-1"><strong>Discount:</strong> Senior/PWD (20%)</div>` : ''}
           <div class="mb-1"><strong>Status:</strong> <span class="badge status-${s.status}">${s.status}</span></div>
           ${s.void_reason ? `<div class="mb-1"><strong>Void Reason:</strong> ${s.void_reason}</div>` : ''}
         </div>

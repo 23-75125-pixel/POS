@@ -39,6 +39,7 @@
     <div class="nav-section-label" data-role="admin">Admin</div>
     <a href="users.html" class="nav-item" id="nav-users" data-role="admin"><i class="bi bi-people"></i> Users</a>
     <a href="settings.html" class="nav-item" id="nav-settings" data-role="admin"><i class="bi bi-gear"></i> Settings</a>
+    <a href="#" class="nav-item" onclick="handleLogout(); return false;"><i class="bi bi-box-arrow-right"></i> Sign Out</a>
   </nav>
   <div class="sidebar-footer">
     <div class="user-info">
@@ -297,10 +298,10 @@ window.setRange = function(range, reload = true) {
 };
 
 window.loadDashboard = async function() {
-  const storeId = auth.currentStore?.id;
+  const storeId = auth.hasRole('admin') ? null : auth.currentStore?.id;
   const dateFrom = document.getElementById('date-from').value;
   const dateTo = document.getElementById('date-to').value;
-  if (!storeId || !dateFrom || !dateTo) return;
+  if (!dateFrom || !dateTo) return;
 
   try {
     const [{ summary }, topProds, payBreakdown, recentSales] = await Promise.all([
@@ -331,22 +332,34 @@ window.loadDashboard = async function() {
 };
 
 async function getRecentSales(storeId, dateFrom, dateTo) {
-  const { data } = await db.from('sales')
+  const fromIso = `${dateFrom}T00:00:00+08:00`;
+  const toIso = `${dateTo}T23:59:59.999+08:00`;
+  let q = db.from('sales')
     .select('txn_no, created_at, total, payment_json, status, profiles(full_name)')
-    .eq('store_id', storeId)
-    .gte('created_at', dateFrom + 'T00:00:00')
-    .lte('created_at', dateTo + 'T23:59:59')
+    .gte('created_at', fromIso)
+    .lte('created_at', toIso)
     .order('created_at', { ascending: false })
     .limit(10);
+  if (storeId) q = q.eq('store_id', storeId);
+
+  const { data } = await q;
   return data || [];
 }
 
 async function checkLowStock(storeId) {
-  const { data: lowItems } = await db.from('store_products')
-    .select('id, stock, reorder_level')
-    .eq('store_id', storeId);
+  let q = db.from('store_products')
+    .select('id, stock, reorder_level, is_available, store_id, products(is_active)');
+  if (storeId) q = q.eq('store_id', storeId);
 
-  const lowCount = (lowItems || []).filter(i => i.stock <= i.reorder_level).length;
+  const { data: lowItems } = await q;
+
+  const lowCount = (lowItems || []).filter(i => {
+    if (i.is_available === false) return false;
+    if (i.products?.is_active === false) return false;
+    const stock = Number(i.stock || 0);
+    const reorder = Number(i.reorder_level || 0);
+    return stock <= reorder;
+  }).length;
 
   if (lowCount > 0) {
     document.getElementById('low-stock-banner').classList.remove('d-none');
@@ -393,30 +406,29 @@ function scheduleDashboardRealtimeRefresh() {
 }
 
 function setupRealtime() {
-  if (!auth.currentStore?.id) return;
   if (realtimeChannel) db.removeChannel(realtimeChannel);
 
-  realtimeChannel = db.channel(`dashboard-live-${auth.currentStore.id}`);
+  const isAdmin = auth.hasRole('admin');
+  const storeId = auth.currentStore?.id;
+  if (!isAdmin && !storeId) return;
+
+  realtimeChannel = db.channel(isAdmin ? 'dashboard-live-all' : `dashboard-live-${storeId}`);
 
   realtimeChannel.on(
     'postgres_changes',
-    { event: '*', schema: 'public', table: 'sales', filter: `store_id=eq.${auth.currentStore.id}` },
+    isAdmin
+      ? { event: '*', schema: 'public', table: 'sales' }
+      : { event: '*', schema: 'public', table: 'sales', filter: `store_id=eq.${storeId}` },
     scheduleDashboardRealtimeRefresh
   );
 
   realtimeChannel.on(
     'postgres_changes',
-    { event: '*', schema: 'public', table: 'store_products', filter: `store_id=eq.${auth.currentStore.id}` },
+    isAdmin
+      ? { event: '*', schema: 'public', table: 'store_products' }
+      : { event: '*', schema: 'public', table: 'store_products', filter: `store_id=eq.${storeId}` },
     scheduleDashboardRealtimeRefresh
   );
-
-  if (auth.hasRole('admin')) {
-    realtimeChannel.on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'sales' },
-      scheduleDashboardRealtimeRefresh
-    );
-  }
 
   realtimeChannel.subscribe();
 }

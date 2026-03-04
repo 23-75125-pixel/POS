@@ -1107,3 +1107,15 @@ body {
 
 /* HR */
 hr { border-color: var(--line); margin: 12px 0; opacity: 1; }
+
+/* Mobile only: hide top-bar Back/Home/Logout buttons */
+@media (max-width: 992px) {
+  .top-bar button[onclick*="goBackPage"],
+  .top-bar button[onclick*="goHomePage"],
+  .top-bar button[onclick*="handleLogout"],
+  .top-bar button[onclick*="logoutHere"],
+  .top-bar #btnHome,
+  .top-bar #btnLogout {
+    display: none !important;
+  }
+}

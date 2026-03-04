@@ -28,8 +28,8 @@ export const products = {
     if (error) throw error;
     return (data || []).map(p => ({
       ...p,
-      stock: p.store_products[0]?.stock || 0,
-      reorder_level: p.store_products[0]?.reorder_level || 5,
+      stock: Number(p.store_products[0]?.stock || 0),
+      reorder_level: Number(p.store_products[0]?.reorder_level || 5),
       is_available: p.store_products[0]?.is_available !== false
     }));
   },
@@ -56,7 +56,12 @@ export const products = {
       .limit(1).single();
     if (error) return null;
     const sp = data?.store_products?.find(sp => sp.store_id === storeId);
-    return { ...data, stock: sp?.stock || 0, is_available: sp?.is_available !== false };
+    return {
+      ...data,
+      stock: Number(sp?.stock || 0),
+      reorder_level: Number(sp?.reorder_level || 5),
+      is_available: sp?.is_available !== false
+    };
   },
 
   async create(productData) {

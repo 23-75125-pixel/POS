@@ -28,6 +28,7 @@
     <div class="nav-section-label" data-role="admin">Admin</div>
     <a href="users.html" class="nav-item" id="nav-users" data-role="admin"><i class="bi bi-people"></i> Users</a>
     <a href="settings.html" class="nav-item" id="nav-settings" data-role="admin"><i class="bi bi-gear"></i> Settings</a>
+    <a href="#" class="nav-item" onclick="handleLogout(); return false;"><i class="bi bi-box-arrow-right"></i> Sign Out</a>
   </nav>
   <div class="sidebar-footer">
     <div class="user-info"><div class="user-avatar" id="user-avatar-letter">U</div><div class="user-details"><div class="user-name" data-user-name>Loading...</div><div class="user-role" data-user-role>User</div></div></div>
@@ -505,10 +506,11 @@ window.loadMovements = async function() {
     let q = db.from('stock_movements')
       .select('*, products(name, sku), profiles(full_name)')
       .eq('store_id', storeId)
-      .gte('created_at', dateFrom + 'T00:00:00')
-      .lte('created_at', dateTo + 'T23:59:59')
       .order('created_at', { ascending: false })
       .limit(200);
+
+    if (dateFrom) q = q.gte('created_at', dateFrom + 'T00:00:00+08:00');
+    if (dateTo) q = q.lte('created_at', dateTo + 'T23:59:59+08:00');
 
     if (reason) q = q.eq('reason', reason);
     const { data, error } = await q;
@@ -570,12 +572,18 @@ window.loadLowStock = async function() {
 
   try {
     const { data, error } = await db.from('store_products')
-      .select('stock, reorder_level, products(id, name, sku, unit, price, cost)')
+      .select('stock, reorder_level, is_available, products(id, name, sku, unit, price, cost, is_active)')
       .eq('store_id', auth.currentStore?.id);
 
     if (error) throw error;
 
-    const lowItems = (data || []).filter(i => i.stock <= i.reorder_level);
+    const lowItems = (data || []).filter(i => {
+      if (i.is_available === false) return false;
+      if (i.products?.is_active === false) return false;
+      const stock = Number(i.stock || 0);
+      const reorder = Number(i.reorder_level || 0);
+      return stock <= reorder;
+    });
 
     if (!lowItems.length) {
       el.innerHTML = `<div class="empty-state py-5"><i class="bi bi-check-circle-fill" style="font-size:48px;color:var(--success);"></i><h5 class="mt-3">All stock levels are OK!</h5><p>No products are below their reorder level.</p></div>`;
@@ -592,14 +600,16 @@ window.loadLowStock = async function() {
           <thead><tr><th>Product</th><th>SKU</th><th>Unit</th><th class="text-end">Current Stock</th><th class="text-end">Reorder Level</th><th class="text-end">Shortage</th><th>Action</th></tr></thead>
           <tbody>
             ${lowItems.map(i => {
-              const isOut = i.stock === 0;
-              const shortage = Math.max(0, i.reorder_level - i.stock);
+              const stock = Number(i.stock || 0);
+              const reorder = Number(i.reorder_level || 0);
+              const isOut = stock === 0;
+              const shortage = Math.max(0, reorder - stock);
               return `<tr>
                 <td class="fw-bold" style="font-size:13px;">${i.products?.name || '—'}</td>
                 <td style="font-size:12px;color:var(--text-muted);">${i.products?.sku || '—'}</td>
                 <td style="font-size:12px;">${i.products?.unit || 'pcs'}</td>
-                <td class="text-end"><span style="color:${isOut ? 'var(--danger)' : 'var(--warning)'};font-weight:700;">${i.stock}</span></td>
-                <td class="text-end" style="color:var(--text-muted);">${i.reorder_level}</td>
+                <td class="text-end"><span style="color:${isOut ? 'var(--danger)' : 'var(--warning)'};font-weight:700;">${stock}</span></td>
+                <td class="text-end" style="color:var(--text-muted);">${reorder}</td>
                 <td class="text-end" style="color:var(--warning);font-weight:600;">${shortage}</td>
                 <td><button class="btn btn-sm btn-primary" onclick="openAdjustModal('${i.products?.id}')"><i class="bi bi-plus-circle me-1"></i>Restock</button></td>
               </tr>`;

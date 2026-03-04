@@ -28,6 +28,7 @@
     <div class="nav-section-label" data-role="admin">Admin</div>
     <a href="users.html" class="nav-item" id="nav-users" data-role="admin"><i class="bi bi-people"></i> Users</a>
     <a href="settings.html" class="nav-item" id="nav-settings" data-role="admin"><i class="bi bi-gear"></i> Settings</a>
+    <a href="#" class="nav-item" onclick="handleLogout(); return false;"><i class="bi bi-box-arrow-right"></i> Sign Out</a>
   </nav>
   <div class="sidebar-footer">
     <div class="user-info"><div class="user-avatar" id="user-avatar-letter">U</div><div class="user-details"><div class="user-name" data-user-name>Loading...</div><div class="user-role" data-user-role>User</div></div></div>
@@ -188,6 +189,27 @@ async function init() {
   const monthAgo = new Date(Date.now() - 30 * 86400000).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
   document.getElementById('hist-date-from').value = monthAgo;
   document.getElementById('hist-date-to').value = today;
+
+  const txnSearchEl = document.getElementById('txn-search');
+  if (txnSearchEl) {
+    txnSearchEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        findSale();
+      }
+    });
+  }
+
+  const histDateToEl = document.getElementById('hist-date-to');
+  if (histDateToEl) {
+    histDateToEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        loadReturns();
+      }
+    });
+  }
+
   await loadReturns();
   setupRealtime();
 }
@@ -239,6 +261,7 @@ window.findSale = async function() {
   try {
     currentSale = await sales.getByTxnNo(txnNo);
     if (!currentSale) { showToast('Transaction not found', 'warning'); return; }
+    if (currentSale.store_id !== auth.currentStore?.id) { showToast('Transaction does not belong to the active store', 'warning'); return; }
     if (currentSale.status === 'voided') { showToast('Cannot return a voided transaction', 'warning'); return; }
 
     document.getElementById('return-txn-display').textContent = currentSale.txn_no;
@@ -282,7 +305,11 @@ window.updateRefundTotal = function() {
   let total = 0;
   document.querySelectorAll('.return-item-cb:checked').forEach(cb => {
     const id = cb.dataset.id;
-    const qty = parseFloat(document.querySelector(`.return-qty[data-id="${id}"]`)?.value) || 0;
+    const qtyInput = document.querySelector(`.return-qty[data-id="${id}"]`);
+    const maxQty = parseFloat(cb.dataset.max) || 0;
+    let qty = parseFloat(qtyInput?.value) || 0;
+    qty = Math.max(0, Math.min(qty, maxQty));
+    if (qtyInput) qtyInput.value = qty > 0 ? String(qty) : '0';
     const price = parseFloat(cb.dataset.price) || 0;
     const lineTotal = qty * price;
     total += lineTotal;
@@ -298,7 +325,9 @@ window.processReturn = async function() {
   const selectedItems = [];
   document.querySelectorAll('.return-item-cb:checked').forEach(cb => {
     const id = cb.dataset.id;
-    const qty = parseFloat(document.querySelector(`.return-qty[data-id="${id}"]`)?.value) || 0;
+    const maxQty = parseFloat(cb.dataset.max) || 0;
+    const rawQty = parseFloat(document.querySelector(`.return-qty[data-id="${id}"]`)?.value) || 0;
+    const qty = Math.max(0, Math.min(rawQty, maxQty));
     const price = parseFloat(cb.dataset.price) || 0;
     if (qty > 0) {
       selectedItems.push({
@@ -346,12 +375,15 @@ window.loadReturns = async function() {
   tbody.innerHTML = '<tr><td colspan="6" class="text-center py-3"><div class="spinner-border spinner-border-sm"></div></td></tr>';
 
   try {
-    const { data, error } = await db.from('returns')
+    let q = db.from('returns')
       .select('*, sales(txn_no)')
       .eq('store_id', auth.currentStore?.id)
-      .gte('created_at', dateFrom + 'T00:00:00')
-      .lte('created_at', dateTo + 'T23:59:59')
       .order('created_at', { ascending: false });
+
+    if (dateFrom) q = q.gte('created_at', dateFrom + 'T00:00:00+08:00');
+    if (dateTo) q = q.lte('created_at', dateTo + 'T23:59:59+08:00');
+
+    const { data, error } = await q;
 
     if (error) throw error;
 

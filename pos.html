@@ -129,10 +129,6 @@
     <div style="padding:8px 12px;border-bottom:1px solid var(--border);">
       <div class="d-flex gap-2">
         <input type="text" class="form-control form-control-sm" id="customer-name" placeholder="Customer name (optional)">
-        <div class="form-check d-flex align-items-center gap-1 ms-1">
-          <input class="form-check-input" type="checkbox" id="is-senior" onchange="recalcCart()">
-          <label class="form-check-label" for="is-senior" style="font-size:11px;white-space:nowrap;">Senior/PWD</label>
-        </div>
       </div>
     </div>
 
@@ -161,7 +157,6 @@
     <div class="cart-totals">
       <div class="totals-row"><span>Subtotal</span><span id="cart-subtotal">₱0.00</span></div>
       <div class="totals-row" id="discount-row" style="display:none;"><span>Discount</span><span id="cart-discount" style="color:var(--warning);">-₱0.00</span></div>
-      <div class="totals-row" id="senior-row" style="display:none;"><span>Senior/PWD (20%)</span><span id="cart-senior" style="color:var(--warning);">-₱0.00</span></div>
       <div class="totals-row"><span style="font-size:10px;color:var(--text-muted);">VATable Sales</span><span id="cart-vatable" style="font-size:12px;">₱0.00</span></div>
       <div class="totals-row"><span style="font-size:10px;color:var(--text-muted);">VAT (12%)</span><span id="cart-vat" style="font-size:12px;">₱0.00</span></div>
       <div class="totals-row grand"><span>TOTAL</span><span id="cart-total">₱0.00</span></div>
@@ -427,7 +422,7 @@ import auth from './src/js/auth.js';
 import { posSession, sales } from './src/js/pos.js';
 import { products, categories } from './src/js/products.js';
 import receipts from './src/js/receipts.js';
-import { formatPeso, showToast, showLoading, hideLoading, computeVat, computeSeniorDiscount, debounce } from './src/js/utils.js';
+import { formatPeso, showToast, showLoading, hideLoading, computeVat, debounce } from './src/js/utils.js';
 import db from './src/js/supabaseClient.js';
 
 // State
@@ -834,7 +829,6 @@ window.clearCart = function() {
   cart = [];
   document.getElementById('txn-discount').value = '';
   document.getElementById('customer-name').value = '';
-  document.getElementById('is-senior').checked = false;
   renderCart();
 };
 
@@ -878,13 +872,7 @@ function updateCartTotals() {
   if (discountType === 'percent') discountAmt = subtotal * discountAmt / 100;
   discountAmt = Math.min(discountAmt, subtotal);
 
-  let total = subtotal - discountAmt;
-  const isSenior = document.getElementById('is-senior').checked;
-  let seniorDiscount = 0;
-  if (isSenior && total > 0) {
-    seniorDiscount = computeSeniorDiscount(total);
-    total -= seniorDiscount;
-  }
+  const total = subtotal - discountAmt;
 
   const vat = computeVat(total, auth.currentStore?.vat_registered !== false);
 
@@ -900,13 +888,6 @@ function updateCartTotals() {
     document.getElementById('discount-row').style.display = 'none';
   }
 
-  if (seniorDiscount > 0) {
-    document.getElementById('senior-row').style.display = 'flex';
-    document.getElementById('cart-senior').textContent = '-' + formatPeso(seniorDiscount);
-  } else {
-    document.getElementById('senior-row').style.display = 'none';
-  }
-
   document.getElementById('btn-checkout').disabled = !cart.length || !currentSession;
 }
 
@@ -920,10 +901,7 @@ window.openCheckout = function() {
   let discountAmt = parseFloat(document.getElementById('txn-discount').value) || 0;
   const discountType = document.getElementById('discount-type').value;
   if (discountType === 'percent') discountAmt = subtotal * discountAmt / 100;
-  let total = subtotal - Math.min(discountAmt, subtotal);
-
-  const isSenior = document.getElementById('is-senior').checked;
-  if (isSenior) total -= computeSeniorDiscount(total);
+  const total = subtotal - Math.min(discountAmt, subtotal);
 
   document.getElementById('co-subtotal').textContent = formatPeso(subtotal);
   document.getElementById('co-total').textContent = formatPeso(total);
@@ -1042,7 +1020,6 @@ window.completeSale = async function() {
   let discountAmt = parseFloat(document.getElementById('txn-discount').value) || 0;
   const discountType = document.getElementById('discount-type').value;
   if (discountType === 'percent') discountAmt = subtotal * discountAmt / 100;
-  const isSenior = document.getElementById('is-senior').checked;
 
   try {
     showLoading('Processing sale...');
@@ -1054,8 +1031,6 @@ window.completeSale = async function() {
       payments,
       discountTotal: Math.min(discountAmt, subtotal),
       customerName: document.getElementById('customer-name').value.trim(),
-      isSenior,
-      isPwd: false,
       notes: document.getElementById('payment-reference').value.trim()
     });
 
@@ -1108,6 +1083,7 @@ window.findSaleForReturn = async function() {
     const { sales: salesMod } = await import('./src/js/pos.js');
     const sale = await salesMod.getByTxnNo(txnNo);
     if (!sale) { showToast('Sale not found', 'warning'); return; }
+    if (sale.store_id !== auth.currentStore?.id) { showToast('Sale does not belong to the active store', 'warning'); return; }
     if (sale.status === 'voided') { showToast('This sale is already voided', 'warning'); return; }
 
     returnSaleData = sale;
@@ -1139,8 +1115,12 @@ window.updateReturnTotal = function() {
   let total = 0;
   document.querySelectorAll('.return-item-check:checked').forEach(cb => {
     const id = cb.dataset.itemId;
-    const qty = parseFloat(document.querySelector(`.return-qty-input[data-item-id="${id}"]`)?.value) || 0;
-    const price = parseFloat(cb.closest('tr').querySelector('.return-qty-input').dataset.price) || 0;
+    const qtyInput = document.querySelector(`.return-qty-input[data-item-id="${id}"]`);
+    const maxQty = parseFloat(qtyInput?.dataset.max) || 0;
+    let qty = parseFloat(qtyInput?.value) || 0;
+    qty = Math.max(0, Math.min(qty, maxQty));
+    if (qtyInput) qtyInput.value = qty > 0 ? String(qty) : '0';
+    const price = parseFloat(qtyInput?.dataset.price) || 0;
     total += qty * price;
   });
   document.getElementById('return-total-display').textContent = `Refund Total: ${formatPeso(total)}`;
@@ -1152,7 +1132,10 @@ window.processReturn = async function() {
   const selectedItems = [];
   document.querySelectorAll('.return-item-check:checked').forEach(cb => {
     const id = cb.dataset.itemId;
-    const qty = parseFloat(document.querySelector(`.return-qty-input[data-item-id="${id}"]`)?.value) || 0;
+    const qtyInput = document.querySelector(`.return-qty-input[data-item-id="${id}"]`);
+    const maxQty = parseFloat(qtyInput?.dataset.max) || 0;
+    const rawQty = parseFloat(qtyInput?.value) || 0;
+    const qty = Math.max(0, Math.min(rawQty, maxQty));
     const saleItem = returnSaleData.sale_items.find(i => i.id === id);
     if (saleItem && qty > 0) {
       selectedItems.push({

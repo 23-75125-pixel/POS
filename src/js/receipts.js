@@ -66,7 +66,7 @@ export const receipts = {
   <div class="row"><span>Date:</span><span>${formatDate(sale.created_at, true)}</span></div>
   <div class="row"><span>Cashier:</span><span>${sale.profiles?.full_name || 'N/A'}</span></div>
   ${sale.customer_name ? `<div class="row"><span>Customer:</span><span>${sale.customer_name}</span></div>` : ''}
-  ${(sale.is_senior || sale.is_pwd) ? `<div class="row"><span>Discount Type:</span><span>${sale.is_senior ? 'Senior' : 'PWD'}</span></div>` : ''}
+  ${sale.is_senior ? `<div class="row"><span>Discount Type:</span><span>Senior</span></div>` : ''}
   
   <div class="divider"></div>
   
@@ -94,7 +94,7 @@ export const receipts = {
   
   <div class="row"><span>Subtotal:</span><span>${formatPeso(sale.subtotal)}</span></div>
   ${(sale.discount_total > 0) ? `<div class="row"><span>Discount:</span><span>-${formatPeso(sale.discount_total)}</span></div>` : ''}
-  ${(sale.senior_discount > 0) ? `<div class="row"><span>Senior/PWD Disc:</span><span>-${formatPeso(sale.senior_discount)}</span></div>` : ''}
+  ${(sale.senior_discount > 0) ? `<div class="row"><span>Senior Disc:</span><span>-${formatPeso(sale.senior_discount)}</span></div>` : ''}
   
   <div class="divider-solid"></div>
   <div class="row bold"><span>TOTAL:</span><span>${formatPeso(sale.total)}</span></div>

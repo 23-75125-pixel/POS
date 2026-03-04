@@ -2,13 +2,21 @@
 import db from './supabaseClient.js';
 import { exportToCSV } from './utils.js';
 
+function getDateRangeBounds(dateFrom, dateTo) {
+  return {
+    fromIso: `${dateFrom}T00:00:00+08:00`,
+    toIso: `${dateTo}T23:59:59.999+08:00`
+  };
+}
+
 export const reports = {
   async getSalesSummary(storeId, dateFrom, dateTo) {
+    const { fromIso, toIso } = getDateRangeBounds(dateFrom, dateTo);
     let q = db.from('sales')
       .select('*, sale_items(qty, price, discount, cost_snapshot, line_total)')
       .eq('status', 'completed')
-      .gte('created_at', dateFrom + 'T00:00:00')
-      .lte('created_at', dateTo + 'T23:59:59')
+      .gte('created_at', fromIso)
+      .lte('created_at', toIso)
       .order('created_at', { ascending: false });
 
     if (storeId) q = q.eq('store_id', storeId);
@@ -38,13 +46,16 @@ export const reports = {
   },
 
   async getTopProducts(storeId, dateFrom, dateTo, limit = 10) {
+    const { fromIso, toIso } = getDateRangeBounds(dateFrom, dateTo);
     // Group by product from sale_items joining sales
-    const { data: salesIds, error: salesIdsError } = await db.from('sales')
+    let salesQuery = db.from('sales')
       .select('id')
       .eq('status', 'completed')
-      .eq('store_id', storeId)
-      .gte('created_at', dateFrom + 'T00:00:00')
-      .lte('created_at', dateTo + 'T23:59:59');
+      .gte('created_at', fromIso)
+      .lte('created_at', toIso);
+    if (storeId) salesQuery = salesQuery.eq('store_id', storeId);
+
+    const { data: salesIds, error: salesIdsError } = await salesQuery;
     if (salesIdsError) throw salesIdsError;
 
     if (!salesIds?.length) return [];
@@ -77,12 +88,15 @@ export const reports = {
   },
 
   async getCategorySales(storeId, dateFrom, dateTo) {
-    const { data: salesIds, error: salesIdsError } = await db.from('sales')
+    const { fromIso, toIso } = getDateRangeBounds(dateFrom, dateTo);
+    let salesQuery = db.from('sales')
       .select('id')
       .eq('status', 'completed')
-      .eq('store_id', storeId)
-      .gte('created_at', dateFrom + 'T00:00:00')
-      .lte('created_at', dateTo + 'T23:59:59');
+      .gte('created_at', fromIso)
+      .lte('created_at', toIso);
+    if (storeId) salesQuery = salesQuery.eq('store_id', storeId);
+
+    const { data: salesIds, error: salesIdsError } = await salesQuery;
     if (salesIdsError) throw salesIdsError;
 
     if (!salesIds?.length) return [];
@@ -109,12 +123,15 @@ export const reports = {
   },
 
   async getPaymentBreakdown(storeId, dateFrom, dateTo) {
-    const { data, error } = await db.from('sales')
+    const { fromIso, toIso } = getDateRangeBounds(dateFrom, dateTo);
+    let q = db.from('sales')
       .select('payment_json, total')
       .eq('status', 'completed')
-      .eq('store_id', storeId)
-      .gte('created_at', dateFrom + 'T00:00:00')
-      .lte('created_at', dateTo + 'T23:59:59');
+      .gte('created_at', fromIso)
+      .lte('created_at', toIso);
+    if (storeId) q = q.eq('store_id', storeId);
+
+    const { data, error } = await q;
     if (error) throw error;
 
     if (!data) return [];
@@ -133,13 +150,16 @@ export const reports = {
   },
 
   async getDailySales(storeId, dateFrom, dateTo) {
-    const { data, error } = await db.from('sales')
+    const { fromIso, toIso } = getDateRangeBounds(dateFrom, dateTo);
+    let q = db.from('sales')
       .select('created_at, total, discount_total, vat_amount')
       .eq('status', 'completed')
-      .eq('store_id', storeId)
-      .gte('created_at', dateFrom + 'T00:00:00')
-      .lte('created_at', dateTo + 'T23:59:59')
+      .gte('created_at', fromIso)
+      .lte('created_at', toIso)
       .order('created_at');
+    if (storeId) q = q.eq('store_id', storeId);
+
+    const { data, error } = await q;
     if (error) throw error;
 
     if (!data) return [];

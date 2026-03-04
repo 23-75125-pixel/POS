@@ -1,7 +1,7 @@
 // src/js/pos.js
 import db from './supabaseClient.js';
 import auth from './auth.js';
-import { computeVat, computeSeniorDiscount } from './utils.js';
+import { computeVat } from './utils.js';
 
 export const posSession = {
   current: null,
@@ -135,7 +135,6 @@ export const sales = {
       storeId, sessionId, cashierId, items,
       payments, discountTotal = 0,
       customerId = null, customerName = '',
-      isSenior = false, isPwd = false,
       notes = ''
     } = saleData;
 
@@ -146,13 +145,7 @@ export const sales = {
     let subtotal = items.reduce((sum, item) => sum + (item.line_total || 0), 0);
     const grandTotal = subtotal - discountTotal;
 
-    // Senior/PWD discount (20% of VAT-exclusive)
-    let seniorDiscount = 0;
-    if (isSenior || isPwd) {
-      seniorDiscount = computeSeniorDiscount(grandTotal);
-    }
-
-    const finalTotal = grandTotal - seniorDiscount;
+    const finalTotal = grandTotal;
     const vatBreakdown = computeVat(finalTotal, vatRegistered);
     const amountTendered = payments.reduce((s, p) => s + p.amount, 0);
     const change = payments.find(p => p.method === 'cash')
@@ -174,7 +167,7 @@ export const sales = {
       customer_id: customerId,
       txn_no: txnData,
       subtotal,
-      discount_total: discountTotal + seniorDiscount,
+      discount_total: discountTotal,
       vatable_sales: vatBreakdown.vatableSales,
       vat_amount: vatBreakdown.vatAmount,
       exempt_sales: vatBreakdown.exemptSales,
@@ -183,9 +176,9 @@ export const sales = {
       change_amount: change,
       payment_json: payments,
       customer_name: customerName,
-      is_senior: isSenior,
-      is_pwd: isPwd,
-      senior_discount: seniorDiscount,
+      is_senior: false,
+      is_pwd: false,
+      senior_discount: 0,
       status: 'completed',
       notes
     }).select().single();
