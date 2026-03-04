@@ -946,6 +946,16 @@ body {
 
   .table-responsive {
     -webkit-overflow-scrolling: touch;
+    overflow-x: auto;
+  }
+
+  .table-responsive .table {
+    min-width: 720px;
+  }
+
+  .table-responsive .table th,
+  .table-responsive .table td {
+    white-space: nowrap;
   }
 
   .reports-controls,
