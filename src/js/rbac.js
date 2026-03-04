@@ -20,8 +20,8 @@ export const PERMISSIONS = {
 
   // Products
   'products.view': ['admin', 'staff'],
-  'products.create': ['admin'],
-  'products.edit': ['admin'],
+  'products.create': ['admin', 'staff'],
+  'products.edit': ['admin', 'staff'],
   'products.delete': ['admin'],
   'products.import': ['admin'],
 

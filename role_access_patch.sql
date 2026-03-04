@@ -12,8 +12,8 @@ CREATE POLICY "categories_update" ON categories FOR UPDATE USING (get_user_role(
 -- PRODUCTS policies
 DROP POLICY IF EXISTS "products_insert" ON products;
 DROP POLICY IF EXISTS "products_update" ON products;
-CREATE POLICY "products_insert" ON products FOR INSERT WITH CHECK (get_user_role() = 'admin');
-CREATE POLICY "products_update" ON products FOR UPDATE USING (get_user_role() = 'admin');
+CREATE POLICY "products_insert" ON products FOR INSERT WITH CHECK (get_user_role() IN ('admin','staff'));
+CREATE POLICY "products_update" ON products FOR UPDATE USING (get_user_role() IN ('admin','staff'));
 
 -- STORE PRODUCTS policies
 DROP POLICY IF EXISTS "sp_insert" ON store_products;

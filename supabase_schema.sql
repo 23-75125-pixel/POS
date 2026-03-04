@@ -671,8 +671,8 @@ DROP POLICY IF EXISTS "products_insert" ON products;
 DROP POLICY IF EXISTS "products_update" ON products;
 DROP POLICY IF EXISTS "products_delete" ON products;
 CREATE POLICY "products_select" ON products FOR SELECT TO authenticated USING (true);
-CREATE POLICY "products_insert" ON products FOR INSERT WITH CHECK (get_user_role() = 'admin');
-CREATE POLICY "products_update" ON products FOR UPDATE USING (get_user_role() = 'admin');
+CREATE POLICY "products_insert" ON products FOR INSERT WITH CHECK (get_user_role() IN ('admin','staff'));
+CREATE POLICY "products_update" ON products FOR UPDATE USING (get_user_role() IN ('admin','staff'));
 CREATE POLICY "products_delete" ON products FOR DELETE USING (get_user_role() = 'admin');
 
 -- STORE PRODUCTS policies
