@@ -684,7 +684,7 @@ CREATE POLICY "sp_select" ON store_products FOR SELECT
 CREATE POLICY "sp_insert" ON store_products FOR INSERT
   WITH CHECK (has_store_access(store_id) AND get_user_role() IN ('admin','staff'));
 CREATE POLICY "sp_update" ON store_products FOR UPDATE
-  USING (has_store_access(store_id) AND get_user_role() IN ('admin','staff'));
+  USING (has_store_access(store_id) AND get_user_role() IN ('admin','staff','cashier'));
 
 -- STOCK MOVEMENTS policies
 DROP POLICY IF EXISTS "sm_select" ON stock_movements;
@@ -692,7 +692,13 @@ DROP POLICY IF EXISTS "sm_insert" ON stock_movements;
 CREATE POLICY "sm_select" ON stock_movements FOR SELECT
   USING (has_store_access(store_id));
 CREATE POLICY "sm_insert" ON stock_movements FOR INSERT
-  WITH CHECK (has_store_access(store_id) AND get_user_role() IN ('admin','staff','cashier'));
+  WITH CHECK (
+    has_store_access(store_id)
+    AND (
+      get_user_role() IN ('admin','staff')
+      OR (get_user_role() = 'cashier' AND reason IN ('sale','return'))
+    )
+  );
 
 -- CUSTOMERS policies
 DROP POLICY IF EXISTS "customers_select" ON customers;
