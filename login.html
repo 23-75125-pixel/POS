@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PH-POS | Login</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg-primary: #eef2ff;
+      --bg-secondary: #ffffff;
+      --border: #dbe3f1;
+      --text-primary: #0f172a;
+      --text-secondary: #334155;
+      --text-muted: #64748b;
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --accent-light: rgba(99,102,241,0.16);
+      --danger: #ef4444;
+      --card-shadow: 0 22px 48px rgba(15,23,42,0.16);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        color-scheme: dark;
+        --bg-primary: #0f172a;
+        --bg-secondary: #1e293b;
+        --border: #334155;
+        --text-primary: #f1f5f9;
+        --text-secondary: #94a3b8;
+        --text-muted: #64748b;
+        --accent-light: rgba(99,102,241,0.15);
+        --card-shadow: 0 25px 50px rgba(0,0,0,0.4);
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg-primary);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'DM Sans', system-ui, sans-serif;
+      color: var(--text-primary);
+      position: relative;
+      overflow: hidden;
+    }
+    .bg-pattern {
+      position: absolute;
+      inset: 0;
+      background-image: radial-gradient(circle at 20% 50%, rgba(99,102,241,0.06) 0%, transparent 48%);
+      pointer-events: none;
+    }
+    .login-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 40px;
+      width: 100%;
+      max-width: 420px;
+      position: relative;
+      z-index: 1;
+      box-shadow: 0 10px 28px rgba(15,23,42,0.12);
+    }
+    .logo-area {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    .logo-icon {
+      width: 56px;
+      height: 56px;
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 14px;
+      overflow: hidden;
+    }
+    .logo-icon img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .logo-title {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+    .logo-sub {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    .form-label { font-size: 13px; color: var(--text-secondary); font-weight: 500; margin-bottom: 6px; }
+    .form-control {
+      background: var(--bg-primary) !important;
+      border: 1px solid var(--border) !important;
+      color: var(--text-primary) !important;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 14px;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .form-control:focus {
+      border-color: var(--accent) !important;
+      box-shadow: 0 0 0 3px rgba(99,102,241,0.2) !important;
+    }
+    .form-control::placeholder { color: var(--text-muted); }
+    .input-group .input-group-text {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-right: none;
+      color: var(--text-muted);
+    }
+    .input-group .form-control { border-left: none !important; }
+    .btn-login {
+      width: 100%;
+      background: var(--accent);
+      border: none;
+      color: white;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .btn-login:hover { background: var(--accent-hover); transform: translateY(-1px); }
+    .btn-login:disabled { opacity: 0.7; transform: none; cursor: not-allowed; }
+    .error-msg {
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.3);
+      color: #fca5a5;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13px;
+      display: none;
+      margin-bottom: 16px;
+    }
+    .form-group { margin-bottom: 18px; }
+    .show-pass-toggle {
+      cursor: pointer;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-left: none;
+      color: var(--text-muted);
+      padding: 0 12px;
+      border-radius: 0 8px 8px 0;
+      transition: color 0.15s;
+    }
+    .show-pass-toggle:hover { color: var(--text-primary); }
+    .demo-creds {
+      background: var(--bg-primary);
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 20px;
+      border: 1px solid var(--border);
+    }
+    .demo-creds strong { color: var(--text-secondary); }
+    .version-tag {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .auth-nav {
+      position: fixed;
+      top: 14px;
+      right: 14px;
+      display: flex;
+      gap: 8px;
+      z-index: 5;
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-pattern"></div>
+
+  <div class="auth-nav">
+    <button class="btn btn-secondary btn-sm" onclick="goBackPage()"><i class="bi bi-arrow-left"></i> Back</button>
+    <button class="btn btn-secondary btn-sm" onclick="goHomePage()"><i class="bi bi-house"></i> Home</button>
+    <button class="btn btn-secondary btn-sm" onclick="logoutHere()"><i class="bi bi-box-arrow-right"></i> Logout</button>
+  </div>
+  
+  <div class="login-card">
+    <div class="logo-area">
+      <div class="logo-icon"><img src="https://placehold.co/96x96/111827/ffffff/png?text=POS" alt="PH-POS logo"></div>
+      <div class="logo-title">PH-POS System</div>
+      <div class="logo-sub">Multi-Store Point of Sale · Philippines</div>
+    </div>
+
+    <div class="error-msg" id="error-msg">
+      <i class="bi bi-exclamation-triangle me-2"></i>
+      <span id="error-text">Invalid credentials</span>
+    </div>
+
+    <div class="alert alert-success" id="logout-msg" style="display:none; font-size:13px; padding:10px 14px; margin-bottom:16px;">
+      <i class="bi bi-check-circle me-2"></i>
+      <span>You have logged out successfully.</span>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Admin or Email</label>
+      <div class="input-group">
+        <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+        <input type="text" class="form-control" id="email" placeholder="admin or admin@phpos.ph" autocomplete="username">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Password</label>
+      <div class="input-group">
+        <span class="input-group-text"><i class="bi bi-lock"></i></span>
+        <input type="password" class="form-control" id="password" placeholder="Enter your password" autocomplete="current-password">
+        <button class="show-pass-toggle" type="button" id="toggle-pass">
+          <i class="bi bi-eye" id="eye-icon"></i>
+        </button>
+      </div>
+    </div>
+
+    <button class="btn-login" id="login-btn" onclick="handleLogin()">
+      <i class="bi bi-box-arrow-in-right"></i>
+      Sign In
+    </button>
+
+    <div class="demo-creds">
+      <div><strong>Default usernames:</strong> admin, staff, cashier</div>
+      <div><strong>Default password:</strong> password123</div>
+    </div>
+
+    
+  </div>
+
+  <script>
+    const SUPABASE_URL = window.POS_CONFIG?.supabaseUrl || '';
+    const SUPABASE_ANON_KEY = window.POS_CONFIG?.supabaseAnonKey || '';
+    const { createClient } = supabase;
+    const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: true
+      }
+    });
+
+    function clearPersistedAuthStorage() {
+      try {
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && /^sb-.*-auth-token$/.test(key)) keysToRemove.push(key);
+        }
+        keysToRemove.forEach(key => localStorage.removeItem(key));
+      } catch (_) {}
+    }
+
+    async function validateSessionUser(userId) {
+      const { data: profile, error } = await db.from('profiles').select('id, role, is_active').eq('id', userId).single();
+      if (error || !profile) return false;
+      if (profile.is_active === false) return false;
+      return true;
+    }
+
+    (async function handleExistingSession() {
+      const params = new URLSearchParams(window.location.search);
+      const fromLogout = params.get('logged_out') === '1';
+
+      if (fromLogout) {
+        try { await db.auth.signOut({ scope: 'local' }); } catch (_) {}
+        clearPersistedAuthStorage();
+        localStorage.removeItem('pos_store_id');
+        window.history.replaceState({}, '', 'login.html');
+        return;
+      }
+
+      const { data: { session } } = await db.auth.getSession();
+      if (!session?.user) return;
+
+      const ok = await validateSessionUser(session.user.id);
+      if (!ok) {
+        try { await db.auth.signOut({ scope: 'local' }); } catch (_) {}
+        clearPersistedAuthStorage();
+        localStorage.removeItem('pos_store_id');
+        return;
+      }
+
+      // Prevent automatic login redirect: keep user on login page until explicit sign-in.
+      try { await db.auth.signOut({ scope: 'local' }); } catch (_) {}
+      clearPersistedAuthStorage();
+      localStorage.removeItem('pos_store_id');
+      showError('Please sign in to continue.');
+    })();
+
+    document.getElementById('toggle-pass').addEventListener('click', () => {
+      const pass = document.getElementById('password');
+      const icon = document.getElementById('eye-icon');
+      if (pass.type === 'password') {
+        pass.type = 'text';
+        icon.className = 'bi bi-eye-slash';
+      } else {
+        pass.type = 'password';
+        icon.className = 'bi bi-eye';
+      }
+    });
+
+    document.getElementById('password').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') handleLogin();
+    });
+
+    async function handleLogin() {
+      const loginId = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const btn = document.getElementById('login-btn');
+      const errBox = document.getElementById('error-msg');
+      const logoutBox = document.getElementById('logout-msg');
+
+      if (!loginId || !password) {
+        showError('Please enter email and password.');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Signing in...';
+      errBox.style.display = 'none';
+      if (logoutBox) logoutBox.style.display = 'none';
+
+      try {
+        const normalizedLogin = loginId.toLowerCase();
+        const { email } = await resolveLoginEmail(normalizedLogin);
+        const { data, error } = await db.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        await redirectByRole(data.user.id);
+      } catch (err) {
+        const msg = String(err?.message || '');
+        if (msg.toLowerCase().includes('invalid login credentials') || msg.toLowerCase().includes('invalid credentials')) {
+          showError('Invalid credentials. If this is a new staff/cashier account, ask admin to create it from Users page.');
+        } else {
+          showError(msg || 'Login failed. Check your credentials.');
+        }
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-box-arrow-in-right"></i> Sign In';
+      }
+    }
+
+    async function redirectByRole(userId) {
+      const { data: profile } = await db.from('profiles').select('role').eq('id', userId).single();
+      const role = profile?.role;
+      if (role === 'cashier') {
+        window.location.href = 'pos.html';
+      } else if (role === 'staff') {
+        window.location.href = 'inventory.html';
+      } else {
+        window.location.href = 'dashboard.html';
+      }
+    }
+
+    async function resolveLoginEmail(loginId) {
+      const { data, error } = await db.rpc('resolve_login_identity', { p_login: loginId });
+      if (error) throw error;
+
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row) {
+        const fallback = {
+          admin: 'admin@phpos.ph',
+          staff: 'staff@phpos.ph',
+          manager: 'staff@phpos.ph',
+          cashier: 'cashier@phpos.ph'
+        };
+        return { email: fallback[loginId] || loginId, hasAuthUser: true };
+      }
+
+      if (row.is_active === false) {
+        throw new Error('This user account is inactive. Please contact admin.');
+      }
+
+      return { email: row.email, hasAuthUser: !!row.has_auth_user };
+    }
+
+    function showError(msg) {
+      const errBox = document.getElementById('error-msg');
+      document.getElementById('error-text').textContent = msg;
+      errBox.style.display = 'block';
+      const logoutBox = document.getElementById('logout-msg');
+      if (logoutBox) logoutBox.style.display = 'none';
+    }
+
+    function showLogoutSuccessIfNeeded() {
+      const params = new URLSearchParams(window.location.search);
+      const logoutBox = document.getElementById('logout-msg');
+      if (!logoutBox) return;
+
+      if (params.get('logged_out') === '1') {
+        logoutBox.style.display = 'block';
+      }
+    }
+
+    window.goBackPage = () => {
+      if (window.history.length > 1) window.history.back();
+      else window.location.href = 'index.html';
+    };
+
+    window.goHomePage = () => {
+      window.location.href = 'index.html';
+    };
+
+    window.logoutHere = async () => {
+      try {
+        await db.auth.signOut({ scope: 'global' });
+      } catch (_) {
+        try { await db.auth.signOut({ scope: 'local' }); } catch (_) {}
+      } finally {
+        clearPersistedAuthStorage();
+        localStorage.removeItem('pos_store_id');
+        window.location.href = `login.html?logged_out=1&t=${Date.now()}`;
+      }
+    };
+
+    showLogoutSuccessIfNeeded();
+  </script>
+</body>
+</html>

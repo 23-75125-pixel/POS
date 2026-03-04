@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inventory · PH-POS</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="src/css/main.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+</head>
+<body>
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-logo"><div class="logo-icon"><img src="https://placehold.co/96x96/111827/ffffff/png?text=POS" alt="PH-POS logo" class="logo-image"></div><div><div class="logo-text">PH-POS</div><div class="logo-sub">Multi-Store System</div></div></div>
+  <div class="sidebar-store"><label>ACTIVE STORE</label><select id="store-selector" class="form-select"></select></div>
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">Sales</div>
+    <a href="pos.html" class="nav-item" id="nav-pos" data-permission="pos.access"><i class="bi bi-grid-3x3-gap"></i> Point of Sale</a>
+    <a href="sales.html" class="nav-item" id="nav-sales" data-permission="sales.view"><i class="bi bi-receipt"></i> Sales History</a>
+    <a href="returns.html" class="nav-item" id="nav-returns" data-permission="pos.process_returns"><i class="bi bi-arrow-return-left"></i> Returns</a>
+    <div class="nav-section-label" data-permission="inventory.view">Inventory</div>
+    <a href="products.html" class="nav-item" id="nav-products" data-permission="products.view"><i class="bi bi-box-seam"></i> Products</a>
+    <a href="inventory.html" class="nav-item active" id="nav-inventory" data-permission="inventory.view"><i class="bi bi-stack"></i> Inventory</a>
+    <div class="nav-section-label" data-permission="reports.view_store">Analytics</div>
+    <a href="reports.html" class="nav-item" id="nav-reports" data-permission="reports.view_store"><i class="bi bi-bar-chart-line"></i> Reports</a>
+    <a href="dashboard.html" class="nav-item" id="nav-dashboard" data-permission="dashboard.view"><i class="bi bi-speedometer2"></i> Dashboard</a>
+    <div class="nav-section-label" data-role="admin">Admin</div>
+    <a href="users.html" class="nav-item" id="nav-users" data-role="admin"><i class="bi bi-people"></i> Users</a>
+    <a href="settings.html" class="nav-item" id="nav-settings" data-role="admin"><i class="bi bi-gear"></i> Settings</a>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="user-info"><div class="user-avatar" id="user-avatar-letter">U</div><div class="user-details"><div class="user-name" data-user-name>Loading...</div><div class="user-role" data-user-role>User</div></div></div>
+    <button class="btn btn-secondary btn-sm w-100" onclick="handleLogout()"><i class="bi bi-box-arrow-right"></i> Sign Out</button>
+  </div>
+</nav>
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+<div class="main-content">
+  <div class="top-bar">
+    <button class="btn btn-secondary btn-sm d-lg-none" onclick="toggleSidebar()"><i class="bi bi-list"></i></button>
+    <div class="top-bar-title">Inventory</div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-secondary btn-sm" onclick="goBackPage()"><i class="bi bi-arrow-left"></i> Back</button>
+      <button class="btn btn-secondary btn-sm" onclick="goHomePage()"><i class="bi bi-house"></i> Home</button>
+      <button class="btn btn-secondary btn-sm" onclick="handleLogout()"><i class="bi bi-box-arrow-right"></i> Logout</button>
+    </div>
+  </div>
+  <div class="page-content">
+
+    <!-- Tabs -->
+    <div class="minimal-tabs" role="tablist" aria-label="Inventory views">
+      <button class="btn minimal-tab active" id="tab-btn-stock" onclick="showTab('stock')">Stock Levels</button>
+      <button class="btn minimal-tab" id="tab-btn-movements" onclick="showTab('movements')">Stock Movements</button>
+      <button class="btn minimal-tab" id="tab-btn-low-stock" onclick="showTab('low-stock')">Low Stock</button>
+    </div>
+
+    <!-- ===== STOCK LEVELS TAB ===== -->
+    <div id="pane-stock">
+      <div class="section-header mb-3">
+        <div class="d-flex gap-2">
+          <div class="search-wrapper inv-search">
+            <i class="bi bi-search"></i>
+            <input type="text" class="form-control" id="stock-search" placeholder="Search products..." oninput="filterStock()">
+          </div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="openAdjustModal()">
+          <i class="bi bi-arrow-up-down me-1"></i>Stock Adjustment
+        </button>
+      </div>
+      <div class="table-responsive">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Product</th>
+              <th>SKU</th>
+              <th>Category</th>
+              <th class="text-end">Current Stock</th>
+              <th class="text-end">Reorder Level</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="stock-tbody">
+            <tr><td colspan="7" class="text-center py-5"><div class="spinner-border spinner-border-sm mb-2"></div><br>Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ===== STOCK MOVEMENTS TAB ===== -->
+    <div id="pane-movements" style="display:none;">
+      <div class="d-flex gap-2 mb-3 flex-wrap align-items-end">
+        <div>
+          <label class="form-label mb-1">From</label>
+          <input type="date" class="form-control form-control-sm" id="mv-date-from" style="width:150px;">
+        </div>
+        <div>
+          <label class="form-label mb-1">To</label>
+          <input type="date" class="form-control form-control-sm" id="mv-date-to" style="width:150px;">
+        </div>
+        <div>
+          <label class="form-label mb-1">Reason</label>
+          <select class="form-select form-select-sm" id="mv-reason" style="width:160px;">
+            <option value="">All Reasons</option>
+            <option value="sale">Sale</option>
+            <option value="return">Return</option>
+            <option value="adjustment">Adjustment</option>
+            <option value="purchase">Purchase</option>
+            <option value="damage">Damage</option>
+            <option value="opening">Opening</option>
+          </select>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="loadMovements()">
+          <i class="bi bi-search me-1"></i>Search
+        </button>
+        <button class="btn btn-secondary btn-sm ms-auto" onclick="exportMovements()">
+          <i class="bi bi-download me-1"></i>Export CSV
+        </button>
+      </div>
+      <div class="table-responsive">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Date/Time</th>
+              <th>Product</th>
+              <th>SKU</th>
+              <th>Reason</th>
+              <th class="text-end">Qty Before</th>
+              <th class="text-end">Change</th>
+              <th class="text-end">Qty After</th>
+              <th>By</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody id="movements-tbody">
+            <tr><td colspan="9" class="text-center py-4 text-muted">Select a date range and click Search</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ===== LOW STOCK TAB ===== -->
+    <div id="pane-low-stock" style="display:none;">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="text-muted">Products at or below their reorder level</div>
+        <button class="btn btn-secondary btn-sm" onclick="loadLowStock()">
+          <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+        </button>
+      </div>
+      <div id="low-stock-content">
+        <div class="text-center py-5 text-muted">
+          <div class="spinner-border spinner-border-sm mb-2"></div><br>Loading...
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ===== STOCK ADJUSTMENT MODAL ===== -->
+<div class="modal fade" id="adjust-modal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Stock Adjustment</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Product *</label>
+          <select class="form-select" id="adj-product-id">
+            <option value="">Select product...</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Current Stock</label>
+          <input type="text" class="form-control" id="adj-current-stock" readonly style="background:var(--bg-primary);color:var(--text-muted);">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Adjustment Type *</label>
+          <select class="form-select" id="adj-type" onchange="updateAdjLabel()">
+            <option value="add">➕ Add Stock (Purchase / Receiving)</option>
+            <option value="remove">➖ Remove Stock (Damage / Loss)</option>
+            <option value="set">🔄 Set Exact Quantity (Correction)</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label" id="adj-qty-label">Quantity to Add *</label>
+          <input type="number" class="form-control" id="adj-qty" placeholder="0" min="0" step="1" oninput="updateAdjPreview()">
+        </div>
+        <div class="mb-3" id="adj-preview-row" style="display:none;">
+          <div class="card" style="background:var(--bg-primary);">
+            <div class="d-flex justify-content-between mb-1" style="font-size:13px;">
+              <span>Before:</span><span id="adj-preview-before">0</span>
+            </div>
+            <div class="d-flex justify-content-between mb-1" style="font-size:13px;">
+              <span>Change:</span><span id="adj-preview-change" style="font-weight:700;">+0</span>
+            </div>
+            <div class="d-flex justify-content-between" style="font-size:14px;font-weight:700;">
+              <span>After:</span><span id="adj-preview-after" style="color:var(--accent);">0</span>
+            </div>
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Reason *</label>
+          <select class="form-select" id="adj-reason">
+            <option value="adjustment">Manual Adjustment</option>
+            <option value="purchase">Purchase / Receiving</option>
+            <option value="damage">Damage / Loss</option>
+            <option value="transfer_in">Transfer In</option>
+            <option value="transfer_out">Transfer Out</option>
+            <option value="opening">Opening Count</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Notes</label>
+          <textarea class="form-control" id="adj-notes" rows="2" placeholder="Optional notes..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" onclick="confirmAdjustment()">
+          <i class="bi bi-check-circle me-1"></i>Apply Adjustment
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM MODAL -->
+<div class="modal fade" id="confirm-modal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title" id="confirm-title">Confirm</h5></div>
+      <div class="modal-body"><p id="confirm-message"></p></div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" id="confirm-ok-btn">Confirm</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="loading-overlay" class="d-none">
+  <div class="loading-spinner"><div class="spinner-border mb-3"></div><div class="loading-text">Loading...</div></div>
+</div>
+<div id="toast-container"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script type="module">
+import auth from './src/js/auth.js';
+import rbac from './src/js/rbac.js';
+import { products } from './src/js/products.js';
+import { formatPeso, formatDate, showToast, showLoading, hideLoading, exportToCSV } from './src/js/utils.js';
+import db from './src/js/supabaseClient.js';
+
+window.handleLogout = () => auth.logout();
+window.goHomePage = () => {
+  window.location.href = 'index.html';
+};
+window.goBackPage = () => {
+  if (window.history.length > 1) window.history.back();
+  else goHomePage();
+};
+window.toggleSidebar = () => {
+  document.getElementById('sidebar').classList.toggle('show');
+  document.getElementById('sidebar-overlay').classList.toggle('show');
+};
+
+let allStockItems = [];
+let movementsData = [];
+let realtimeChannel = null;
+let realtimeReloadTimer = null;
+
+async function init() {
+  const session = await auth.init();
+  if (!session) { window.location.href = 'login.html'; return; }
+  if (!auth.hasRole('admin', 'staff')) { window.location.href = 'pos.html'; return; }
+  rbac.updateUI();
+  const av = document.getElementById('user-avatar-letter');
+  if (av) av.textContent = (auth.currentProfile?.full_name || 'U')[0].toUpperCase();
+
+  // Default date range
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+  const weekAgo = new Date(Date.now() - 7 * 86400000).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+  document.getElementById('mv-date-from').value = weekAgo;
+  document.getElementById('mv-date-to').value = today;
+
+  await loadStockLevels();
+  setupRealtime();
+}
+
+function getActiveInventoryTab() {
+  if (document.getElementById('pane-movements').style.display !== 'none') return 'movements';
+  if (document.getElementById('pane-low-stock').style.display !== 'none') return 'low-stock';
+  return 'stock';
+}
+
+function scheduleInventoryRealtimeRefresh() {
+  clearTimeout(realtimeReloadTimer);
+  realtimeReloadTimer = setTimeout(async () => {
+    await loadStockLevels();
+    const activeTab = getActiveInventoryTab();
+    if (activeTab === 'movements') await loadMovements();
+    if (activeTab === 'low-stock') await loadLowStock();
+  }, 300);
+}
+
+function setupRealtime() {
+  if (!auth.currentStore?.id) return;
+  if (realtimeChannel) db.removeChannel(realtimeChannel);
+
+  realtimeChannel = db
+    .channel(`inventory-live-${auth.currentStore.id}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'store_products', filter: `store_id=eq.${auth.currentStore.id}` },
+      scheduleInventoryRealtimeRefresh
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'stock_movements', filter: `store_id=eq.${auth.currentStore.id}` },
+      scheduleInventoryRealtimeRefresh
+    )
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, scheduleInventoryRealtimeRefresh)
+    .subscribe();
+}
+
+window.addEventListener('beforeunload', () => {
+  if (realtimeChannel) db.removeChannel(realtimeChannel);
+});
+
+// ===== TAB SWITCHING =====
+window.showTab = function(tab) {
+  ['stock', 'movements', 'low-stock'].forEach(t => {
+    document.getElementById('pane-' + t).style.display = t === tab ? '' : 'none';
+    const btn = document.getElementById('tab-btn-' + t);
+    if (btn) btn.classList.toggle('active', t === tab);
+  });
+  if (tab === 'low-stock') loadLowStock();
+};
+
+// ===== STOCK LEVELS =====
+async function loadStockLevels() {
+  try {
+    allStockItems = await products.getWithStock(auth.currentStore?.id);
+    filterStock();
+  } catch (err) {
+    showToast('Error loading stock: ' + err.message, 'danger');
+  }
+}
+
+window.filterStock = function() {
+  const search = document.getElementById('stock-search').value.toLowerCase();
+  const filtered = allStockItems.filter(p =>
+    !search ||
+    p.name.toLowerCase().includes(search) ||
+    (p.sku || '').toLowerCase().includes(search)
+  );
+  renderStockTable(filtered);
+};
+
+function renderStockTable(items) {
+  const tbody = document.getElementById('stock-tbody');
+  if (!items.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-5"><div class="empty-state"><i class="bi bi-inbox"></i><div>No products found</div></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = items.map(p => {
+    const isOut = p.stock === 0;
+    const isLow = p.stock > 0 && p.stock <= p.reorder_level;
+    const statusColor = isOut ? 'var(--danger)' : isLow ? 'var(--warning)' : 'var(--success)';
+    const statusLabel = isOut ? '⛔ Out of Stock' : isLow ? '⚠️ Low Stock' : '✅ OK';
+    return `<tr>
+      <td>
+        <div class="fw-bold" style="font-size:13px;">${p.name}</div>
+        <div style="font-size:11px;color:var(--text-muted);">${p.unit}</div>
+      </td>
+      <td style="font-size:12px;">${p.sku}</td>
+      <td><span class="badge" style="background:${p.categories?.color||'#6b7280'}20;color:${p.categories?.color||'#6b7280'};font-size:11px;">${p.categories?.name || '—'}</span></td>
+      <td class="text-end"><span style="font-size:16px;font-weight:700;color:${statusColor};">${p.stock}</span></td>
+      <td class="text-end" style="font-size:13px;color:var(--text-muted);">${p.reorder_level}</td>
+      <td><span style="font-size:12px;color:${statusColor};">${statusLabel}</span></td>
+      <td>
+        <button class="btn btn-sm btn-secondary" onclick="openAdjustModal('${p.id}')" title="Adjust Stock">
+          <i class="bi bi-arrow-up-down"></i>
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ===== STOCK ADJUSTMENT =====
+window.openAdjustModal = async function(productId = '') {
+  // Populate product dropdown
+  const sel = document.getElementById('adj-product-id');
+  sel.innerHTML = '<option value="">Select product...</option>';
+  allStockItems.forEach(p => {
+    sel.innerHTML += `<option value="${p.id}" data-stock="${p.stock}">${p.name} (Stock: ${p.stock})</option>`;
+  });
+  if (productId) {
+    sel.value = productId;
+    updateCurrentStockDisplay();
+  } else {
+    document.getElementById('adj-current-stock').value = '';
+  }
+  sel.onchange = updateCurrentStockDisplay;
+
+  document.getElementById('adj-qty').value = '';
+  document.getElementById('adj-notes').value = '';
+  document.getElementById('adj-type').value = 'add';
+  document.getElementById('adj-reason').value = 'adjustment';
+  document.getElementById('adj-preview-row').style.display = 'none';
+  updateAdjLabel();
+
+  new bootstrap.Modal(document.getElementById('adjust-modal')).show();
+};
+
+function updateCurrentStockDisplay() {
+  const sel = document.getElementById('adj-product-id');
+  const opt = sel.options[sel.selectedIndex];
+  const stock = opt?.dataset?.stock || '';
+  document.getElementById('adj-current-stock').value = stock !== '' ? stock + ' units' : '';
+  updateAdjPreview();
+}
+
+window.updateAdjLabel = function() {
+  const type = document.getElementById('adj-type').value;
+  const labels = {
+    add: 'Quantity to Add *',
+    remove: 'Quantity to Remove *',
+    set: 'New Stock Quantity *'
+  };
+  document.getElementById('adj-qty-label').textContent = labels[type];
+  updateAdjPreview();
+};
+
+window.updateAdjPreview = function() {
+  const sel = document.getElementById('adj-product-id');
+  const opt = sel.options[sel.selectedIndex];
+  const current = parseFloat(opt?.dataset?.stock || 0);
+  const qty = parseFloat(document.getElementById('adj-qty').value) || 0;
+  const type = document.getElementById('adj-type').value;
+
+  if (!sel.value || isNaN(qty)) {
+    document.getElementById('adj-preview-row').style.display = 'none';
+    return;
+  }
+
+  let after, change;
+  if (type === 'add') { after = current + qty; change = qty; }
+  else if (type === 'remove') { after = Math.max(0, current - qty); change = -(Math.min(qty, current)); }
+  else { after = qty; change = qty - current; }
+
+  document.getElementById('adj-preview-row').style.display = '';
+  document.getElementById('adj-preview-before').textContent = current;
+  document.getElementById('adj-preview-change').textContent = (change >= 0 ? '+' : '') + change;
+  document.getElementById('adj-preview-change').style.color = change >= 0 ? 'var(--success)' : 'var(--danger)';
+  document.getElementById('adj-preview-after').textContent = after;
+};
+
+window.confirmAdjustment = async function() {
+  const productId = document.getElementById('adj-product-id').value;
+  const qtyInput = parseFloat(document.getElementById('adj-qty').value);
+  const type = document.getElementById('adj-type').value;
+  const reason = document.getElementById('adj-reason').value;
+  const notes = document.getElementById('adj-notes').value.trim();
+
+  if (!productId) { showToast('Select a product', 'warning'); return; }
+  if (isNaN(qtyInput) || qtyInput < 0) { showToast('Enter a valid quantity', 'warning'); return; }
+
+  const sel = document.getElementById('adj-product-id');
+  const current = parseFloat(sel.options[sel.selectedIndex]?.dataset?.stock || 0);
+
+  let qtyChange;
+  if (type === 'add') qtyChange = qtyInput;
+  else if (type === 'remove') qtyChange = -qtyInput;
+  else qtyChange = qtyInput - current; // set exact
+
+  try {
+    showLoading('Applying adjustment...');
+    await products.adjustStock(auth.currentStore.id, productId, qtyChange, reason, notes);
+    bootstrap.Modal.getInstance(document.getElementById('adjust-modal')).hide();
+    showToast('Stock adjusted successfully!', 'success');
+    await loadStockLevels();
+  } catch (err) {
+    showToast('Error: ' + err.message, 'danger');
+  } finally {
+    hideLoading();
+  }
+};
+
+// ===== STOCK MOVEMENTS =====
+window.loadMovements = async function() {
+  const dateFrom = document.getElementById('mv-date-from').value;
+  const dateTo = document.getElementById('mv-date-to').value;
+  const reason = document.getElementById('mv-reason').value;
+  const storeId = auth.currentStore?.id;
+
+  const tbody = document.getElementById('movements-tbody');
+  tbody.innerHTML = '<tr><td colspan="9" class="text-center py-3"><div class="spinner-border spinner-border-sm"></div></td></tr>';
+
+  try {
+    let q = db.from('stock_movements')
+      .select('*, products(name, sku), profiles(full_name)')
+      .eq('store_id', storeId)
+      .gte('created_at', dateFrom + 'T00:00:00')
+      .lte('created_at', dateTo + 'T23:59:59')
+      .order('created_at', { ascending: false })
+      .limit(200);
+
+    if (reason) q = q.eq('reason', reason);
+    const { data, error } = await q;
+    if (error) throw error;
+
+    movementsData = data || [];
+
+    if (!movementsData.length) {
+      tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4" style="color:var(--text-muted);">No movements found</td></tr>';
+      return;
+    }
+
+    const reasonColors = {
+      sale: 'var(--danger)', return: 'var(--success)', adjustment: 'var(--info)',
+      purchase: 'var(--success)', damage: 'var(--warning)', opening: 'var(--accent)',
+      transfer_in: 'var(--success)', transfer_out: 'var(--danger)'
+    };
+
+    tbody.innerHTML = movementsData.map(m => `
+      <tr>
+        <td style="font-size:12px;">${formatDate(m.created_at, true)}</td>
+        <td style="font-size:13px;font-weight:500;">${m.products?.name || '—'}</td>
+        <td style="font-size:12px;color:var(--text-muted);">${m.products?.sku || '—'}</td>
+        <td><span class="badge" style="background:${reasonColors[m.reason]||'#888'}20;color:${reasonColors[m.reason]||'#888'};font-size:11px;text-transform:capitalize;">${m.reason}</span></td>
+        <td class="text-end" style="font-size:13px;">${m.qty_before}</td>
+        <td class="text-end fw-bold" style="font-size:13px;color:${m.qty_change >= 0 ? 'var(--success)' : 'var(--danger)'};">
+          ${m.qty_change >= 0 ? '+' : ''}${m.qty_change}
+        </td>
+        <td class="text-end" style="font-size:13px;font-weight:600;">${m.qty_after}</td>
+        <td style="font-size:12px;">${m.profiles?.full_name || '—'}</td>
+        <td style="font-size:12px;color:var(--text-muted);">${m.notes || ''}</td>
+      </tr>`).join('');
+  } catch (err) {
+    showToast('Error loading movements: ' + err.message, 'danger');
+    tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4" style="color:var(--danger);">Error loading data</td></tr>';
+  }
+};
+
+window.exportMovements = function() {
+  if (!movementsData.length) { showToast('No data to export', 'warning'); return; }
+  const rows = movementsData.map(m => ({
+    date: m.created_at,
+    product: m.products?.name || '',
+    sku: m.products?.sku || '',
+    reason: m.reason,
+    qty_before: m.qty_before,
+    qty_change: m.qty_change,
+    qty_after: m.qty_after,
+    by: m.profiles?.full_name || '',
+    notes: m.notes || ''
+  }));
+  exportToCSV(rows, `stock_movements_${auth.currentStore?.code || ''}_${new Date().toISOString().split('T')[0]}`);
+};
+
+// ===== LOW STOCK =====
+window.loadLowStock = async function() {
+  const el = document.getElementById('low-stock-content');
+  el.innerHTML = '<div class="text-center py-4"><div class="spinner-border spinner-border-sm"></div></div>';
+
+  try {
+    const { data, error } = await db.from('store_products')
+      .select('stock, reorder_level, products(id, name, sku, unit, price, cost)')
+      .eq('store_id', auth.currentStore?.id);
+
+    if (error) throw error;
+
+    const lowItems = (data || []).filter(i => i.stock <= i.reorder_level);
+
+    if (!lowItems.length) {
+      el.innerHTML = `<div class="empty-state py-5"><i class="bi bi-check-circle-fill" style="font-size:48px;color:var(--success);"></i><h5 class="mt-3">All stock levels are OK!</h5><p>No products are below their reorder level.</p></div>`;
+      return;
+    }
+
+    el.innerHTML = `
+      <div class="low-stock-alert mb-3">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        <span><strong>${lowItems.length} product(s)</strong> need restocking</span>
+      </div>
+      <div class="table-responsive">
+        <table class="table">
+          <thead><tr><th>Product</th><th>SKU</th><th>Unit</th><th class="text-end">Current Stock</th><th class="text-end">Reorder Level</th><th class="text-end">Shortage</th><th>Action</th></tr></thead>
+          <tbody>
+            ${lowItems.map(i => {
+              const isOut = i.stock === 0;
+              const shortage = Math.max(0, i.reorder_level - i.stock);
+              return `<tr>
+                <td class="fw-bold" style="font-size:13px;">${i.products?.name || '—'}</td>
+                <td style="font-size:12px;color:var(--text-muted);">${i.products?.sku || '—'}</td>
+                <td style="font-size:12px;">${i.products?.unit || 'pcs'}</td>
+                <td class="text-end"><span style="color:${isOut ? 'var(--danger)' : 'var(--warning)'};font-weight:700;">${i.stock}</span></td>
+                <td class="text-end" style="color:var(--text-muted);">${i.reorder_level}</td>
+                <td class="text-end" style="color:var(--warning);font-weight:600;">${shortage}</td>
+                <td><button class="btn btn-sm btn-primary" onclick="openAdjustModal('${i.products?.id}')"><i class="bi bi-plus-circle me-1"></i>Restock</button></td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  } catch (err) {
+    el.innerHTML = `<div class="text-center py-4" style="color:var(--danger);">Error: ${err.message}</div>`;
+  }
+};
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Returns · PH-POS</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="src/css/main.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+</head>
+<body>
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-logo"><div class="logo-icon"><img src="https://placehold.co/96x96/111827/ffffff/png?text=POS" alt="PH-POS logo" class="logo-image"></div><div><div class="logo-text">PH-POS</div><div class="logo-sub">Multi-Store System</div></div></div>
+  <div class="sidebar-store"><label>ACTIVE STORE</label><select id="store-selector" class="form-select"></select></div>
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">Sales</div>
+    <a href="pos.html" class="nav-item" id="nav-pos" data-permission="pos.access"><i class="bi bi-grid-3x3-gap"></i> Point of Sale</a>
+    <a href="sales.html" class="nav-item" id="nav-sales" data-permission="sales.view"><i class="bi bi-receipt"></i> Sales History</a>
+    <a href="returns.html" class="nav-item active" id="nav-returns" data-permission="pos.process_returns"><i class="bi bi-arrow-return-left"></i> Returns</a>
+    <div class="nav-section-label" data-permission="inventory.view">Inventory</div>
+    <a href="products.html" class="nav-item" id="nav-products" data-permission="products.view"><i class="bi bi-box-seam"></i> Products</a>
+    <a href="inventory.html" class="nav-item" id="nav-inventory" data-permission="inventory.view"><i class="bi bi-stack"></i> Inventory</a>
+    <div class="nav-section-label" data-permission="reports.view_store">Analytics</div>
+    <a href="reports.html" class="nav-item" id="nav-reports" data-permission="reports.view_store"><i class="bi bi-bar-chart-line"></i> Reports</a>
+    <a href="dashboard.html" class="nav-item" id="nav-dashboard" data-permission="dashboard.view"><i class="bi bi-speedometer2"></i> Dashboard</a>
+    <div class="nav-section-label" data-role="admin">Admin</div>
+    <a href="users.html" class="nav-item" id="nav-users" data-role="admin"><i class="bi bi-people"></i> Users</a>
+    <a href="settings.html" class="nav-item" id="nav-settings" data-role="admin"><i class="bi bi-gear"></i> Settings</a>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="user-info"><div class="user-avatar" id="user-avatar-letter">U</div><div class="user-details"><div class="user-name" data-user-name>Loading...</div><div class="user-role" data-user-role>User</div></div></div>
+    <button class="btn btn-secondary btn-sm w-100" onclick="handleLogout()"><i class="bi bi-box-arrow-right"></i> Sign Out</button>
+  </div>
+</nav>
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+<div class="main-content">
+  <div class="top-bar">
+    <button class="btn btn-secondary btn-sm d-lg-none" onclick="toggleSidebar()"><i class="bi bi-list"></i></button>
+    <div class="top-bar-title">Returns & Refunds</div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-secondary btn-sm" onclick="goBackPage()"><i class="bi bi-arrow-left"></i> Back</button>
+      <button class="btn btn-secondary btn-sm" onclick="goHomePage()"><i class="bi bi-house"></i> Home</button>
+      <button class="btn btn-secondary btn-sm" onclick="handleLogout()"><i class="bi bi-box-arrow-right"></i> Logout</button>
+    </div>
+  </div>
+  <div class="page-content">
+    <div class="row g-4">
+
+      <!-- New Return Section -->
+      <div class="col-12 col-lg-5">
+        <div class="card">
+          <div class="section-heading mb-3"><i class="bi bi-arrow-return-left me-2" style="color:var(--warning);"></i>Process New Return</div>
+          <div class="d-flex gap-2 mb-3">
+            <input type="text" class="form-control" id="txn-search" placeholder="Enter OR / TXN number..." oninput="clearReturnForm()">
+            <button class="btn btn-primary" onclick="findSale()"><i class="bi bi-search"></i></button>
+          </div>
+
+          <div id="return-form" style="display:none;">
+            <div class="card mb-3 surface-soft">
+              <div class="mini-muted mb-1">Original Transaction</div>
+              <div class="fw-bold" id="return-txn-display"></div>
+              <div id="return-sale-info"></div>
+            </div>
+
+            <div class="mb-3">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <label class="form-label mb-0">Select Items to Return</label>
+                <div class="form-check mb-0">
+                  <input class="form-check-input" type="checkbox" id="select-all-items" onchange="toggleAllItems()">
+                  <label class="form-check-label">Select All</label>
+                </div>
+              </div>
+              <div id="return-items-list"></div>
+            </div>
+
+            <div class="row g-2 mb-3">
+              <div class="col-6">
+                <label class="form-label">Refund Method</label>
+                <select class="form-select" id="refund-method">
+                  <option value="cash">Cash</option>
+                  <option value="gcash">GCash</option>
+                  <option value="maya">Maya</option>
+                  <option value="card">Card</option>
+                  <option value="store_credit">Store Credit</option>
+                </select>
+              </div>
+              <div class="col-6">
+                <label class="form-label">Restock Items</label>
+                <div class="form-check mt-2">
+                  <input class="form-check-input" type="checkbox" id="restock-items" checked>
+                  <label class="form-check-label">Return to inventory</label>
+                </div>
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">Reason for Return *</label>
+              <textarea class="form-control" id="return-reason" rows="2" placeholder="Enter reason..."></textarea>
+            </div>
+
+            <div class="card mb-3 surface-soft">
+              <div class="d-flex justify-content-between">
+                <span class="fw-bold">Refund Amount:</span>
+                <span class="fw-bold metric-number" style="color:var(--success);" id="refund-total">₱0.00</span>
+              </div>
+            </div>
+
+            <button class="btn btn-warning w-100 fw-bold" onclick="processReturn()">
+              <i class="bi bi-arrow-return-left me-2"></i>Process Return
+            </button>
+          </div>
+
+          <div id="no-sale-msg" class="text-center py-4 text-muted">
+            <i class="bi bi-search" style="font-size:32px;opacity:0.4;"></i>
+            <div class="mt-2">Enter a transaction number to begin</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Returns History -->
+      <div class="col-12 col-lg-7">
+        <div class="card">
+          <div class="section-header mb-3">
+            <div class="section-heading"><i class="bi bi-clock-history me-2" style="color:var(--info);"></i>Return History</div>
+            <button class="btn btn-secondary btn-sm" onclick="loadReturns()"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button>
+          </div>
+          <div class="d-flex gap-2 mb-3">
+            <input type="date" class="form-control form-control-sm" id="hist-date-from" style="width:150px;">
+            <input type="date" class="form-control form-control-sm" id="hist-date-to" style="width:150px;">
+            <button class="btn btn-secondary btn-sm" onclick="loadReturns()"><i class="bi bi-search"></i></button>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm">
+              <thead><tr><th>Return TXN</th><th>Original TXN</th><th>Date</th><th>Method</th><th class="text-end">Refund</th><th>Restocked</th></tr></thead>
+              <tbody id="returns-tbody">
+                <tr><td colspan="6" class="text-center py-4 text-muted">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="loading-overlay" class="d-none">
+  <div class="loading-spinner"><div class="spinner-border mb-3"></div><div class="loading-text">Processing...</div></div>
+</div>
+<div id="toast-container"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script type="module">
+import auth from './src/js/auth.js';
+import rbac from './src/js/rbac.js';
+import { sales } from './src/js/pos.js';
+import { formatPeso, formatDate, showToast, showLoading, hideLoading } from './src/js/utils.js';
+import db from './src/js/supabaseClient.js';
+
+window.handleLogout = () => auth.logout();
+window.goHomePage = () => {
+  window.location.href = 'index.html';
+};
+window.goBackPage = () => {
+  if (window.history.length > 1) window.history.back();
+  else goHomePage();
+};
+window.toggleSidebar = () => {
+  document.getElementById('sidebar').classList.toggle('show');
+  document.getElementById('sidebar-overlay').classList.toggle('show');
+};
+
+let currentSale = null;
+let realtimeChannel = null;
+let realtimeReloadTimer = null;
+
+async function init() {
+  const session = await auth.init();
+  if (!session) { window.location.href = 'login.html'; return; }
+  if (!auth.hasRole('admin')) { window.location.href = auth.hasRole('cashier') ? 'pos.html' : 'inventory.html'; return; }
+  rbac.updateUI();
+  const av = document.getElementById('user-avatar-letter');
+  if (av) av.textContent = (auth.currentProfile?.full_name || 'U')[0].toUpperCase();
+
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+  const monthAgo = new Date(Date.now() - 30 * 86400000).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+  document.getElementById('hist-date-from').value = monthAgo;
+  document.getElementById('hist-date-to').value = today;
+  await loadReturns();
+  setupRealtime();
+}
+
+function scheduleReturnsRealtimeRefresh() {
+  clearTimeout(realtimeReloadTimer);
+  realtimeReloadTimer = setTimeout(async () => {
+    await loadReturns();
+  }, 300);
+}
+
+function setupRealtime() {
+  if (!auth.currentStore?.id) return;
+  if (realtimeChannel) db.removeChannel(realtimeChannel);
+
+  realtimeChannel = db
+    .channel(`returns-live-${auth.currentStore.id}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'returns', filter: `store_id=eq.${auth.currentStore.id}` },
+      scheduleReturnsRealtimeRefresh
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'return_items' },
+      scheduleReturnsRealtimeRefresh
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'sales', filter: `store_id=eq.${auth.currentStore.id}` },
+      scheduleReturnsRealtimeRefresh
+    )
+    .subscribe();
+}
+
+window.addEventListener('beforeunload', () => {
+  if (realtimeChannel) db.removeChannel(realtimeChannel);
+});
+
+window.clearReturnForm = function() {
+  currentSale = null;
+  document.getElementById('return-form').style.display = 'none';
+  document.getElementById('no-sale-msg').style.display = '';
+};
+
+window.findSale = async function() {
+  const txnNo = document.getElementById('txn-search').value.trim();
+  if (!txnNo) return;
+  try {
+    currentSale = await sales.getByTxnNo(txnNo);
+    if (!currentSale) { showToast('Transaction not found', 'warning'); return; }
+    if (currentSale.status === 'voided') { showToast('Cannot return a voided transaction', 'warning'); return; }
+
+    document.getElementById('return-txn-display').textContent = currentSale.txn_no;
+    document.getElementById('return-sale-info').innerHTML = `
+      <span>${formatDate(currentSale.created_at, true)}</span> &nbsp;·&nbsp;
+      <span style="color:var(--accent);">${formatPeso(currentSale.total)}</span>`;
+
+    // Render items
+    const itemsEl = document.getElementById('return-items-list');
+    itemsEl.innerHTML = (currentSale.sale_items || []).map(item => `
+      <div class="d-flex align-items-center gap-2 mb-2 p-2" style="border:1px solid var(--border);border-radius:6px;">
+        <input type="checkbox" class="form-check-input return-item-cb" data-id="${item.id}"
+          data-product-id="${item.product_id}" data-price="${item.price}" data-max="${item.qty}"
+          onchange="updateRefundTotal()">
+        <div style="flex:1;">
+          <div style="font-size:13px;font-weight:500;">${item.product_name}</div>
+          <div style="font-size:11px;color:var(--text-muted);">${formatPeso(item.price)} × ${item.qty}</div>
+        </div>
+        <input type="number" class="form-control form-control-sm return-qty" data-id="${item.id}"
+          value="${item.qty}" min="1" max="${item.qty}" style="width:65px;" oninput="updateRefundTotal()">
+        <span style="font-size:12px;font-weight:600;min-width:60px;text-align:right;" id="item-total-${item.id}">
+          ${formatPeso(item.line_total)}
+        </span>
+      </div>`).join('');
+
+    document.getElementById('return-form').style.display = '';
+    document.getElementById('no-sale-msg').style.display = 'none';
+    document.getElementById('refund-total').textContent = '₱0.00';
+  } catch (err) {
+    showToast('Error: ' + err.message, 'danger');
+  }
+};
+
+window.toggleAllItems = function() {
+  const allChecked = document.getElementById('select-all-items').checked;
+  document.querySelectorAll('.return-item-cb').forEach(cb => cb.checked = allChecked);
+  updateRefundTotal();
+};
+
+window.updateRefundTotal = function() {
+  let total = 0;
+  document.querySelectorAll('.return-item-cb:checked').forEach(cb => {
+    const id = cb.dataset.id;
+    const qty = parseFloat(document.querySelector(`.return-qty[data-id="${id}"]`)?.value) || 0;
+    const price = parseFloat(cb.dataset.price) || 0;
+    const lineTotal = qty * price;
+    total += lineTotal;
+    const el = document.getElementById('item-total-' + id);
+    if (el) el.textContent = formatPeso(lineTotal);
+  });
+  document.getElementById('refund-total').textContent = formatPeso(total);
+};
+
+window.processReturn = async function() {
+  if (!currentSale) return;
+
+  const selectedItems = [];
+  document.querySelectorAll('.return-item-cb:checked').forEach(cb => {
+    const id = cb.dataset.id;
+    const qty = parseFloat(document.querySelector(`.return-qty[data-id="${id}"]`)?.value) || 0;
+    const price = parseFloat(cb.dataset.price) || 0;
+    if (qty > 0) {
+      selectedItems.push({
+        sale_item_id: id,
+        product_id: cb.dataset.productId,
+        qty,
+        price,
+        line_total: qty * price
+      });
+    }
+  });
+
+  if (!selectedItems.length) { showToast('Select at least one item to return', 'warning'); return; }
+
+  const reason = document.getElementById('return-reason').value.trim();
+  if (!reason) { showToast('Enter a reason for the return', 'warning'); return; }
+
+  try {
+    showLoading('Processing return...');
+    await sales.processReturn({
+      storeId: auth.currentStore.id,
+      saleId: currentSale.id,
+      cashierId: auth.currentUser.id,
+      items: selectedItems,
+      refundMethod: document.getElementById('refund-method').value,
+      reason,
+      restock: document.getElementById('restock-items').checked
+    });
+
+    showToast('Return processed successfully!', 'success');
+    document.getElementById('txn-search').value = '';
+    clearReturnForm();
+    await loadReturns();
+  } catch (err) {
+    showToast('Error: ' + err.message, 'danger');
+  } finally {
+    hideLoading();
+  }
+};
+
+window.loadReturns = async function() {
+  const dateFrom = document.getElementById('hist-date-from').value;
+  const dateTo = document.getElementById('hist-date-to').value;
+  const tbody = document.getElementById('returns-tbody');
+  tbody.innerHTML = '<tr><td colspan="6" class="text-center py-3"><div class="spinner-border spinner-border-sm"></div></td></tr>';
+
+  try {
+    const { data, error } = await db.from('returns')
+      .select('*, sales(txn_no)')
+      .eq('store_id', auth.currentStore?.id)
+      .gte('created_at', dateFrom + 'T00:00:00')
+      .lte('created_at', dateTo + 'T23:59:59')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    if (!data?.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4" style="color:var(--text-muted);">No returns found</td></tr>';
+      return;
+    }
+
+    const methodIcons = { cash: '💵', gcash: '📱', maya: '🔵', card: '💳', store_credit: '🏷️' };
+    tbody.innerHTML = data.map(r => `
+      <tr>
+        <td style="font-size:12px;color:var(--accent);">${r.return_txn_no}</td>
+        <td style="font-size:12px;">${r.sales?.txn_no || '—'}</td>
+        <td style="font-size:12px;">${formatDate(r.created_at, true)}</td>
+        <td style="font-size:12px;">${methodIcons[r.refund_method] || ''} ${r.refund_method}</td>
+        <td class="text-end fw-bold" style="color:var(--success);">${formatPeso(r.total_refund)}</td>
+        <td><span class="badge ${r.restock ? 'status-completed' : 'status-closed'}" style="font-size:10px;">${r.restock ? 'Yes' : 'No'}</span></td>
+      </tr>`).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4" style="color:var(--danger);">Error: ${err.message}</td></tr>`;
+  }
+};
+
+init();
+</script>
+</body>
+</html>

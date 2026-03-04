@@ -1,0 +1,1195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>POS · PH-POS</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="src/css/main.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <style>
+    body { overflow: hidden; }
+    .pos-wrapper { display: flex; height: 100vh; overflow: hidden; }
+    .pos-products { flex: 1; display: flex; flex-direction: column; padding: 16px; overflow: hidden; }
+    .pos-cart { width: 380px; display: flex; flex-direction: column; background: var(--bg-secondary); border-left: 1px solid var(--border); }
+    .product-grid { flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; align-content: start; }
+    .cart-items { flex: 1; overflow-y: auto; padding: 6px 10px; }
+    .session-bar { background: rgba(16,185,129,0.1); border-bottom: 1px solid rgba(16,185,129,0.2); padding: 8px 16px; font-size: 12px; color: #10b981; display: flex; align-items: center; gap: 8px; }
+    .session-bar.closed { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.2); color: #ef4444; }
+    .no-session-block { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 40px; text-align: center; }
+    .pos-logo-sm { width: 22px; height: 22px; }
+    @media (max-width: 768px) {
+      .pos-wrapper { flex-direction: column; }
+      .pos-cart { width: 100%; height: 50vh; border-left: none; border-top: 1px solid var(--border); }
+      .pos-products { height: 50vh; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- MINI SIDEBAR TOGGLE (mobile) -->
+<div style="position:fixed;top:10px;left:10px;z-index:200;display:none;" id="menu-btn-mobile">
+  <button class="btn btn-secondary btn-sm" onclick="showMobileMenu()"><i class="bi bi-list"></i></button>
+</div>
+
+<!-- MOBILE NAV DROPDOWN -->
+<div id="mobile-nav" style="display:none;position:fixed;top:0;left:0;right:0;background:var(--bg-secondary);border-bottom:1px solid var(--border);z-index:300;padding:12px 16px;">
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <strong class="d-flex align-items-center gap-2"><span class="logo-icon pos-logo-sm"><img src="https://placehold.co/96x96/111827/ffffff/png?text=POS" alt="PH-POS logo" class="logo-image"></span>PH-POS</strong>
+    <button class="btn btn-sm btn-secondary" onclick="hideMobileMenu()"><i class="bi bi-x"></i></button>
+  </div>
+  <div class="d-flex flex-wrap gap-2">
+    <a href="dashboard.html" class="btn btn-secondary btn-sm">Dashboard</a>
+    <a href="products.html" class="btn btn-secondary btn-sm">Products</a>
+    <a href="sales.html" class="btn btn-secondary btn-sm">Sales</a>
+    <a href="reports.html" class="btn btn-secondary btn-sm">Reports</a>
+    <button class="btn btn-danger btn-sm" onclick="handleLogout()">Logout</button>
+  </div>
+</div>
+
+<div class="pos-wrapper">
+  <!-- LEFT: PRODUCTS -->
+  <div class="pos-products">
+    <!-- Top bar -->
+    <div class="d-flex align-items-center gap-2 mb-3">
+      <div class="d-lg-none"><button class="btn btn-secondary btn-sm" id="menu-btn" onclick="showMobileMenu()"><i class="bi bi-list"></i></button></div>
+      <div class="fw-bold d-flex align-items-center gap-2" style="font-size:15px;"><span class="logo-icon pos-logo-sm"><img src="https://placehold.co/96x96/111827/ffffff/png?text=POS" alt="PH-POS logo" class="logo-image"></span><span id="store-name-display">Loading...</span></div>
+      <div class="ms-auto d-flex gap-2 align-items-center">
+        <div class="session-bar rounded" id="session-status-badge" style="padding:4px 10px;">
+          <i class="bi bi-circle-fill" style="font-size:8px;"></i>
+          <span id="session-status-text">No Session</span>
+        </div>
+        <button class="btn btn-secondary btn-sm" id="btn-session" onclick="handleSessionAction()">
+          <i class="bi bi-play-circle"></i> Open Session
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="goBackPage()" title="Back">
+          <i class="bi bi-arrow-left"></i>
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="goHomePage()" title="Home">
+          <i class="bi bi-house"></i>
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="handleLogout()" title="Logout">
+          <i class="bi bi-box-arrow-right"></i>
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="showCashMovement('in')" title="Cash In">
+          <i class="bi bi-plus-circle"></i>
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="showCashMovement('out')" title="Cash Out">
+          <i class="bi bi-dash-circle"></i>
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="printXReport()" title="X Report">
+          <i class="bi bi-printer"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Search bar + barcode -->
+    <div class="product-search-bar">
+      <div class="search-wrapper flex-grow-1">
+        <i class="bi bi-search"></i>
+        <input type="text" class="form-control" id="product-search" placeholder="Search product or scan barcode..." autofocus>
+      </div>
+    </div>
+
+    <!-- Category filter -->
+    <div class="category-tabs" id="category-tabs">
+      <div class="cat-tab active" data-cat-id="">All</div>
+    </div>
+
+    <!-- Product Grid -->
+    <div class="product-grid" id="product-grid">
+      <div class="text-center py-5" style="grid-column:1/-1;color:var(--text-muted);">
+        <div class="spinner-border spinner-border-sm mb-2"></div><br>Loading products...
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: CART -->
+  <div class="pos-cart">
+    <!-- Session info bar -->
+    <div class="session-bar" id="session-bar">
+      <i class="bi bi-circle-fill" style="font-size:8px;"></i>
+      <span id="session-bar-text">No active session</span>
+    </div>
+
+    <!-- Cart header -->
+    <div class="cart-header">
+      <div class="cart-title"><i class="bi bi-cart3 me-2"></i>Cart</div>
+      <div class="d-flex gap-2">
+        <span class="badge bg-secondary" id="cart-count">0 items</span>
+        <button class="btn btn-sm btn-danger" onclick="clearCart()" title="Clear Cart">
+          <i class="bi bi-trash"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Cart customer -->
+    <div style="padding:8px 12px;border-bottom:1px solid var(--border);">
+      <div class="d-flex gap-2">
+        <input type="text" class="form-control form-control-sm" id="customer-name" placeholder="Customer name (optional)">
+        <div class="form-check d-flex align-items-center gap-1 ms-1">
+          <input class="form-check-input" type="checkbox" id="is-senior" onchange="recalcCart()">
+          <label class="form-check-label" for="is-senior" style="font-size:11px;white-space:nowrap;">Senior/PWD</label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cart Items -->
+    <div class="cart-items" id="cart-items">
+      <div class="empty-state py-4">
+        <i class="bi bi-cart" style="font-size:36px;"></i>
+        <div style="font-size:13px;margin-top:8px;">Cart is empty</div>
+        <div style="font-size:11px;color:var(--text-muted);">Click products to add</div>
+      </div>
+    </div>
+
+    <!-- Discount -->
+    <div style="padding:8px 12px;border-top:1px solid var(--border);">
+      <div class="d-flex gap-2 align-items-center">
+        <label style="font-size:12px;color:var(--text-muted);white-space:nowrap;"><i class="bi bi-tags me-1"></i>Discount:</label>
+        <input type="number" class="form-control form-control-sm" id="txn-discount" placeholder="0.00" min="0" step="0.01" oninput="recalcCart()" style="width:90px;">
+        <select class="form-select form-select-sm" id="discount-type" onchange="recalcCart()" style="width:80px;">
+          <option value="fixed">₱</option>
+          <option value="percent">%</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Totals -->
+    <div class="cart-totals">
+      <div class="totals-row"><span>Subtotal</span><span id="cart-subtotal">₱0.00</span></div>
+      <div class="totals-row" id="discount-row" style="display:none;"><span>Discount</span><span id="cart-discount" style="color:var(--warning);">-₱0.00</span></div>
+      <div class="totals-row" id="senior-row" style="display:none;"><span>Senior/PWD (20%)</span><span id="cart-senior" style="color:var(--warning);">-₱0.00</span></div>
+      <div class="totals-row"><span style="font-size:10px;color:var(--text-muted);">VATable Sales</span><span id="cart-vatable" style="font-size:12px;">₱0.00</span></div>
+      <div class="totals-row"><span style="font-size:10px;color:var(--text-muted);">VAT (12%)</span><span id="cart-vat" style="font-size:12px;">₱0.00</span></div>
+      <div class="totals-row grand"><span>TOTAL</span><span id="cart-total">₱0.00</span></div>
+    </div>
+
+    <!-- Actions -->
+    <div class="cart-actions">
+      <button class="btn btn-success btn-lg w-100 fw-bold" id="btn-checkout" onclick="openCheckout()" disabled>
+        <i class="bi bi-cash-coin me-2"></i>CHECKOUT
+      </button>
+      <button class="btn btn-secondary btn-sm w-100" onclick="openReturns()">
+        <i class="bi bi-arrow-return-left me-1"></i>Process Return / Refund
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ======= OPEN SESSION MODAL ======= -->
+<div class="modal fade" id="session-modal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="session-modal-title">Open POS Session</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Store</label>
+          <select class="form-select" id="session-store-sel"></select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Opening Cash Amount (₱)</label>
+          <input type="number" class="form-control" id="opening-cash" placeholder="0.00" min="0" step="0.01">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-success" onclick="confirmOpenSession()">
+          <i class="bi bi-play-circle me-1"></i>Open Session
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======= CLOSE SESSION MODAL ======= -->
+<div class="modal fade" id="close-session-modal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Close POS Session</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="session-summary-content" style="font-size:13px;"></div>
+        <hr>
+        <div class="mb-3">
+          <label class="form-label">Actual Cash Count (₱)</label>
+          <input type="number" class="form-control" id="closing-cash" placeholder="0.00" min="0" step="0.01">
+        </div>
+        <div id="variance-display" style="font-size:13px;"></div>
+        <div class="mb-3">
+          <label class="form-label">Notes (optional)</label>
+          <textarea class="form-control" id="close-notes" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-danger" onclick="confirmCloseSession()">
+          <i class="bi bi-stop-circle me-1"></i>Close Session
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======= CASH MOVEMENT MODAL ======= -->
+<div class="modal fade" id="cash-movement-modal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="cash-movement-title">Cash In</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Amount (₱)</label>
+          <input type="number" class="form-control" id="cash-movement-amount" placeholder="0.00" min="0.01" step="0.01">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Note</label>
+          <input type="text" class="form-control" id="cash-movement-note" placeholder="Reason...">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" id="btn-cash-movement-confirm" onclick="confirmCashMovement()">Confirm</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======= CHECKOUT MODAL ======= -->
+<div class="modal fade" id="checkout-modal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">💳 Checkout</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <div class="card mb-0">
+              <div class="fw-bold mb-3" style="font-size:14px;">Order Summary</div>
+              <div id="checkout-items-list" style="max-height:200px;overflow-y:auto;"></div>
+              <hr>
+              <div class="d-flex justify-content-between" style="font-size:13px;"><span>Subtotal</span><span id="co-subtotal">₱0.00</span></div>
+              <div class="d-flex justify-content-between" style="font-size:13px;" id="co-discount-row"><span>Discount</span><span id="co-discount" style="color:var(--warning);">-₱0.00</span></div>
+              <div class="d-flex justify-content-between mt-1"><span class="fw-bold" style="font-size:16px;">TOTAL</span><span class="fw-bold" style="font-size:20px;color:var(--accent);" id="co-total">₱0.00</span></div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="mb-3">
+              <label class="form-label fw-bold">Payment Method</label>
+              <div class="d-flex gap-2 flex-wrap mb-2">
+                <button class="payment-method-btn selected" data-method="cash" onclick="selectPaymentMethod('cash')">💵 Cash</button>
+                <button class="payment-method-btn" data-method="gcash" onclick="selectPaymentMethod('gcash')">📱 GCash</button>
+              </div>
+              <div id="split-payment-toggle" class="mb-2">
+                <button class="btn btn-secondary btn-sm" onclick="toggleSplitPayment()">
+                  <i class="bi bi-plus-circle"></i> Split Payment
+                </button>
+              </div>
+            </div>
+
+            <div id="gcash-qr-container" class="mb-3" style="display:none;">
+              <label class="form-label fw-bold">Scan Store GCash QR</label>
+              <div class="card p-2 text-center" style="background:var(--bg-primary);">
+                <img id="gcash-qr-image" src="qr.jpeg" alt="Store GCash QR" style="width:220px;max-width:100%;height:auto;margin:0 auto 8px auto;border-radius:8px;border:1px solid var(--border);">
+                <div id="gcash-qr-caption" style="font-size:12px;color:var(--text-muted);"></div>
+              </div>
+            </div>
+
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          <div id="payment-fields">
+              <div class="mb-3">
+                <label class="form-label">Amount Tendered (₱)</label>
+                <input type="number" class="form-control" id="amount-tendered" placeholder="0.00" min="0" step="0.01" oninput="computeChange()">
+              </div>
+              <div id="split-payments-container" style="display:none;">
+                <div id="split-payment-rows"></div>
+                <button class="btn btn-secondary btn-sm mb-2" onclick="addSplitRow()">+ Add Payment</button>
+              </div>
+              <div class="card mb-0" style="background:var(--bg-primary);">
+                <div class="d-flex justify-content-between mb-1"><span style="font-size:13px;">Amount Tendered</span><span id="co-tendered" style="font-size:13px;">₱0.00</span></div>
+                <div class="d-flex justify-content-between"><span style="font-size:13px;color:var(--success);">Change</span><span style="font-size:18px;font-weight:700;color:var(--success);" id="co-change">₱0.00</span></div>
+              </div>
+            </div>
+
+            <div class="mt-3">
+              <label class="form-label">Reference / Notes (optional)</label>
+              <input type="text" class="form-control" id="payment-reference" placeholder="Reference no., notes...">
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-success btn-lg fw-bold" id="btn-complete-sale" onclick="completeSale()">
+          <i class="bi bi-check-circle me-2"></i>Complete Sale
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======= RETURN MODAL ======= -->
+<div class="modal fade" id="returns-modal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-arrow-return-left me-2"></i>Process Return / Refund</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="d-flex gap-2 mb-3">
+          <input type="text" class="form-control" id="return-txn-search" placeholder="Enter OR number (e.g. STR1-20240101-000001)">
+          <button class="btn btn-primary" onclick="findSaleForReturn()"><i class="bi bi-search"></i> Find</button>
+        </div>
+        <div id="return-sale-details" style="display:none;">
+          <div class="mb-2 fw-bold" id="return-sale-header"></div>
+          <div class="table-responsive">
+            <table class="table table-sm">
+              <thead><tr><th><input type="checkbox" id="return-select-all" onchange="toggleSelectAll()"></th><th>Product</th><th>Qty</th><th>Price</th><th>Return Qty</th></tr></thead>
+              <tbody id="return-items-tbody"></tbody>
+            </table>
+          </div>
+          <div class="row">
+            <div class="col-md-4">
+              <label class="form-label">Refund Method</label>
+              <select class="form-select" id="return-refund-method">
+                <option value="cash">Cash</option>
+                <option value="gcash">GCash</option>
+                <option value="store_credit">Store Credit</option>
+              </select>
+            </div>
+            <div class="col-md-8">
+              <label class="form-label">Reason</label>
+              <input type="text" class="form-control" id="return-reason" placeholder="Reason for return...">
+            </div>
+          </div>
+          <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" id="return-restock" checked>
+            <label class="form-check-label">Return items to stock</label>
+          </div>
+          <div class="mt-2 fw-bold" id="return-total-display" style="color:var(--success);"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-warning" id="btn-process-return" style="display:none;" onclick="processReturn()">
+          <i class="bi bi-arrow-return-left me-1"></i>Process Return
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- RECEIPT MODAL -->
+<div class="modal fade" id="receipt-modal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">✅ Sale Complete!</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body text-center">
+        <div style="font-size:48px;margin-bottom:12px;">🧾</div>
+        <div class="fw-bold mb-1" id="receipt-txn-no" style="font-size:18px;color:var(--accent);"></div>
+        <div style="font-size:13px;color:var(--text-muted);" id="receipt-summary"></div>
+      </div>
+      <div class="modal-footer flex-column">
+        <button class="btn btn-primary w-100" onclick="printReceipt()">
+          <i class="bi bi-printer me-2"></i>Print Receipt
+        </button>
+        <button class="btn btn-secondary w-100" data-bs-dismiss="modal" onclick="resetForNextSale()">
+          <i class="bi bi-arrow-repeat me-1"></i>New Sale
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Loading & Toast -->
+<div id="loading-overlay" class="d-none">
+  <div class="loading-spinner"><div class="spinner-border mb-3"></div><div class="loading-text">Processing...</div></div>
+</div>
+<div id="toast-container"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script type="module">
+import auth from './src/js/auth.js';
+import { posSession, sales } from './src/js/pos.js';
+import { products, categories } from './src/js/products.js';
+import receipts from './src/js/receipts.js';
+import { formatPeso, showToast, showLoading, hideLoading, computeVat, computeSeniorDiscount, debounce } from './src/js/utils.js';
+import db from './src/js/supabaseClient.js';
+
+// State
+let cart = [];
+let allProducts = [];
+let filteredProducts = [];
+let currentCategoryId = '';
+let currentSession = null;
+let currentSale = null;
+let returnSaleData = null;
+let selectedPaymentMethod = 'cash';
+let splitMode = false;
+let splitRows = [];
+let cashMovementType = 'in';
+let realtimeChannel = null;
+let realtimeReloadTimer = null;
+const STORE_GCASH_QR_MAP = {
+  STR1: 'qr.jpeg',
+  STR2: 'qr.jpeg',
+  STR3: 'qr.jpeg',
+  STR4: 'qr.jpeg'
+};
+
+window.handleLogout = () => auth.logout();
+window.goHomePage = () => {
+  window.location.href = 'index.html';
+};
+window.goBackPage = () => {
+  if (window.history.length > 1) window.history.back();
+  else goHomePage();
+};
+window.showMobileMenu = () => { document.getElementById('mobile-nav').style.display = 'block'; };
+window.hideMobileMenu = () => { document.getElementById('mobile-nav').style.display = 'none'; };
+
+function enterNoStoreMode() {
+  document.getElementById('store-name-display').textContent = 'No Store Assigned';
+  document.getElementById('session-status-text').textContent = 'No Session';
+  document.getElementById('session-bar-text').textContent = 'No store assigned - ask admin to grant store access';
+
+  const sessionBtn = document.getElementById('btn-session');
+  const checkoutBtn = document.getElementById('btn-checkout');
+  const searchInput = document.getElementById('product-search');
+
+  if (sessionBtn) {
+    sessionBtn.disabled = true;
+    sessionBtn.classList.add('disabled');
+    sessionBtn.title = 'No store assigned';
+  }
+  if (checkoutBtn) {
+    checkoutBtn.disabled = true;
+    checkoutBtn.title = 'No store assigned';
+  }
+  if (searchInput) {
+    searchInput.disabled = true;
+    searchInput.placeholder = 'No store assigned';
+  }
+
+  document.getElementById('category-tabs').innerHTML = '<div class="cat-tab active" data-cat-id="">All</div>';
+  document.getElementById('product-grid').innerHTML = `
+    <div class="text-center py-5" style="grid-column:1/-1;color:var(--text-muted);">
+      <div class="mb-2">No store assigned to this account.</div>
+      <div class="mb-3">Ask admin to assign at least one store in Users page.</div>
+      <div class="d-flex justify-content-center gap-2">
+        <button class="btn btn-secondary btn-sm" onclick="goHomePage()"><i class="bi bi-house me-1"></i>Home</button>
+        <button class="btn btn-danger btn-sm" onclick="handleLogout()"><i class="bi bi-box-arrow-right me-1"></i>Logout</button>
+      </div>
+    </div>
+  `;
+
+  showToast('No store assigned to this account. Ask admin to assign at least one store in Users page.', 'warning');
+}
+
+async function init() {
+  const session = await auth.init();
+  if (!session) { window.location.href = 'login.html'; return; }
+  if (!auth.hasRole('admin', 'cashier')) { window.location.href = 'inventory.html'; return; }
+
+  if (!auth.currentStore?.id) {
+    enterNoStoreMode();
+    return;
+  }
+
+  document.getElementById('store-name-display').textContent = auth.currentStore?.name || 'No Store';
+
+  // Populate session store selector
+  const storeSel = document.getElementById('session-store-sel');
+  auth.userStores.forEach(s => {
+    storeSel.innerHTML += `<option value="${s.id}" ${s.id === auth.currentStore?.id ? 'selected' : ''}>${s.name}</option>`;
+  });
+
+  // Load current session
+  currentSession = await posSession.loadCurrent(auth.currentStore?.id, auth.currentUser?.id);
+  updateSessionUI();
+
+  // Load products and categories
+  await loadProductsAndCategories();
+
+  // Setup search
+  const searchInput = document.getElementById('product-search');
+  searchInput.addEventListener('input', debounce(handleSearch, 200));
+  searchInput.addEventListener('keydown', handleBarcodeEnter);
+
+  setupRealtime();
+}
+
+function schedulePosRealtimeRefresh() {
+  clearTimeout(realtimeReloadTimer);
+  realtimeReloadTimer = setTimeout(async () => {
+    await loadProductsAndCategories();
+    currentSession = await posSession.loadCurrent(auth.currentStore?.id, auth.currentUser?.id);
+    updateSessionUI();
+  }, 350);
+}
+
+function setupRealtime() {
+  if (!auth.currentStore?.id) return;
+  if (realtimeChannel) db.removeChannel(realtimeChannel);
+
+  realtimeChannel = db
+    .channel(`pos-live-${auth.currentStore.id}-${auth.currentUser?.id || 'user'}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'store_products', filter: `store_id=eq.${auth.currentStore.id}` },
+      schedulePosRealtimeRefresh
+    )
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, schedulePosRealtimeRefresh)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'pos_sessions', filter: `store_id=eq.${auth.currentStore.id}` },
+      schedulePosRealtimeRefresh
+    )
+    .subscribe();
+}
+
+window.addEventListener('beforeunload', () => {
+  if (realtimeChannel) db.removeChannel(realtimeChannel);
+});
+
+async function loadProductsAndCategories() {
+  try {
+    const [prods, cats] = await Promise.all([
+      products.getWithStock(auth.currentStore?.id),
+      categories.getAll()
+    ]);
+    allProducts = prods;
+    filteredProducts = prods;
+
+    // Render categories
+    const tabsEl = document.getElementById('category-tabs');
+    tabsEl.innerHTML = '<div class="cat-tab active" data-cat-id="" onclick="filterByCategory(\'\')">All</div>';
+    cats.forEach(cat => {
+      tabsEl.innerHTML += `<div class="cat-tab" data-cat-id="${cat.id}" onclick="filterByCategory('${cat.id}')" style="border-color:${cat.color}20;">${cat.name}</div>`;
+    });
+
+    renderProducts(allProducts);
+  } catch (err) {
+    showToast('Error loading products: ' + err.message, 'danger');
+  }
+}
+
+function updateSessionUI() {
+  const badge = document.getElementById('session-status-badge');
+  const barEl = document.getElementById('session-bar');
+  const barText = document.getElementById('session-bar-text');
+  const btn = document.getElementById('btn-session');
+  const checkoutBtn = document.getElementById('btn-checkout');
+
+  if (currentSession) {
+    badge.className = 'session-bar rounded';
+    document.getElementById('session-status-text').textContent = 'Session Open';
+    barText.textContent = `Session open since ${new Date(currentSession.opened_at).toLocaleTimeString('en-PH', {timeZone:'Asia/Manila'})}`;
+    btn.innerHTML = '<i class="bi bi-stop-circle"></i> Close Session';
+    btn.className = 'btn btn-warning btn-sm';
+    checkoutBtn.disabled = false;
+  } else {
+    badge.className = 'session-bar rounded closed';
+    document.getElementById('session-status-text').textContent = 'No Session';
+    barEl.className = 'session-bar closed';
+    barText.textContent = 'No active session - open session to start selling';
+    btn.innerHTML = '<i class="bi bi-play-circle"></i> Open Session';
+    btn.className = 'btn btn-success btn-sm';
+    checkoutBtn.disabled = true;
+  }
+}
+
+window.handleSessionAction = function() {
+  if (currentSession) {
+    openCloseSessionModal();
+  } else {
+    new bootstrap.Modal(document.getElementById('session-modal')).show();
+  }
+};
+
+window.confirmOpenSession = async function() {
+  const storeId = document.getElementById('session-store-sel').value;
+  const openingCash = parseFloat(document.getElementById('opening-cash').value) || 0;
+  try {
+    showLoading('Opening session...');
+    currentSession = await posSession.open(storeId, auth.currentUser.id, openingCash);
+    bootstrap.Modal.getInstance(document.getElementById('session-modal')).hide();
+    updateSessionUI();
+    showToast('Session opened successfully!', 'success');
+  } catch (err) {
+    showToast('Error: ' + err.message, 'danger');
+  } finally {
+    hideLoading();
+  }
+};
+
+async function openCloseSessionModal() {
+  const summary = await posSession.getSummary(currentSession.id);
+  const { formatPeso: fp } = await import('./src/js/utils.js');
+
+  document.getElementById('session-summary-content').innerHTML = `
+    <div class="row g-2">
+      <div class="col-6"><div class="card text-center py-2"><div style="font-size:12px;color:var(--text-muted);">Transactions</div><div class="fw-bold">${summary.totalTransactions}</div></div></div>
+      <div class="col-6"><div class="card text-center py-2"><div style="font-size:12px;color:var(--text-muted);">Total Sales</div><div class="fw-bold" style="color:var(--success);">${fp(summary.totalSales)}</div></div></div>
+      <div class="col-6"><div class="card text-center py-2"><div style="font-size:12px;color:var(--text-muted);">Cash In</div><div class="fw-bold">${fp(summary.totalCashIn)}</div></div></div>
+      <div class="col-6"><div class="card text-center py-2"><div style="font-size:12px;color:var(--text-muted);">Cash Out</div><div class="fw-bold" style="color:var(--danger);">${fp(summary.totalCashOut)}</div></div></div>
+    </div>
+  `;
+
+  const closingInput = document.getElementById('closing-cash');
+  closingInput.value = '';
+  closingInput.oninput = () => {
+    const expected = (summary.session?.opening_cash || 0) + summary.totalCashIn - summary.totalCashOut;
+    const actual = parseFloat(closingInput.value) || 0;
+    const variance = actual - expected;
+    document.getElementById('variance-display').innerHTML = `
+      <div class="d-flex justify-content-between"><span style="font-size:13px;">Expected Cash:</span><span class="fw-bold">${fp(expected)}</span></div>
+      <div class="d-flex justify-content-between"><span style="font-size:13px;">Variance:</span><span class="fw-bold" style="color:${variance>=0?'var(--success)':'var(--danger)'};">${fp(variance)}</span></div>
+    `;
+  };
+
+  new bootstrap.Modal(document.getElementById('close-session-modal')).show();
+}
+
+window.confirmCloseSession = async function() {
+  const closingCash = parseFloat(document.getElementById('closing-cash').value);
+  const notes = document.getElementById('close-notes').value;
+  if (isNaN(closingCash)) { showToast('Enter closing cash amount', 'warning'); return; }
+  try {
+    showLoading('Closing session...');
+    await posSession.close(currentSession.id, closingCash, notes);
+    bootstrap.Modal.getInstance(document.getElementById('close-session-modal')).hide();
+    currentSession = null;
+    updateSessionUI();
+    showToast('Session closed successfully!', 'success');
+  } catch (err) {
+    showToast('Error: ' + err.message, 'danger');
+  } finally {
+    hideLoading();
+  }
+};
+
+window.showCashMovement = function(type) {
+  if (!currentSession) { showToast('Open a session first', 'warning'); return; }
+  cashMovementType = type;
+  document.getElementById('cash-movement-title').textContent = type === 'in' ? '💵 Cash In' : '💸 Cash Out';
+  document.getElementById('btn-cash-movement-confirm').textContent = type === 'in' ? 'Add Cash' : 'Remove Cash';
+  document.getElementById('cash-movement-amount').value = '';
+  document.getElementById('cash-movement-note').value = '';
+  new bootstrap.Modal(document.getElementById('cash-movement-modal')).show();
+};
+
+window.confirmCashMovement = async function() {
+  const amount = parseFloat(document.getElementById('cash-movement-amount').value);
+  const note = document.getElementById('cash-movement-note').value;
+  if (!amount || amount <= 0) { showToast('Enter valid amount', 'warning'); return; }
+  try {
+    if (cashMovementType === 'in') {
+      await posSession.cashIn(currentSession.id, auth.currentStore.id, amount, note);
+    } else {
+      await posSession.cashOut(currentSession.id, auth.currentStore.id, amount, note);
+    }
+    bootstrap.Modal.getInstance(document.getElementById('cash-movement-modal')).hide();
+    showToast(`Cash ${cashMovementType === 'in' ? 'added' : 'removed'} successfully!`, 'success');
+  } catch (err) {
+    showToast('Error: ' + err.message, 'danger');
+  }
+};
+
+window.printXReport = async function() {
+  if (!currentSession) { showToast('No active session', 'warning'); return; }
+  const summary = await posSession.getSummary(currentSession.id);
+  receipts.printXReport(summary, auth.currentStore, auth.currentProfile?.full_name);
+};
+
+// ===== PRODUCT GRID =====
+
+function renderProducts(prods) {
+  const grid = document.getElementById('product-grid');
+  if (!prods.length) {
+    grid.innerHTML = '<div class="empty-state py-5" style="grid-column:1/-1;"><i class="bi bi-inbox"></i><div>No products found</div></div>';
+    return;
+  }
+
+  grid.innerHTML = prods.map(p => {
+    const inStock = p.stock > 0;
+    const isLow = p.stock > 0 && p.stock <= p.reorder_level;
+    const stockClass = !inStock ? 'out' : isLow ? 'low' : '';
+    const stockLabel = !inStock ? 'Out of stock' : isLow ? `Low: ${p.stock}` : `Stock: ${p.stock}`;
+
+    return `<div class="product-tile ${!inStock ? 'out-of-stock' : ''}" onclick="${inStock ? `addToCart('${p.id}')` : ''}">
+      <div class="pt-name">${p.name}</div>
+      <div class="pt-price">${formatPeso(p.price)}</div>
+      <div class="pt-stock ${stockClass}">${stockLabel}</div>
+    </div>`;
+  }).join('');
+}
+
+window.filterByCategory = function(catId) {
+  currentCategoryId = catId;
+  document.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
+  document.querySelector(`[data-cat-id="${catId}"]`)?.classList.add('active');
+
+  const search = document.getElementById('product-search').value.toLowerCase();
+  applyFilters(catId, search);
+};
+
+function handleSearch(e) {
+  applyFilters(currentCategoryId, e.target.value.toLowerCase());
+}
+
+function applyFilters(catId, search) {
+  filteredProducts = allProducts.filter(p => {
+    const matchCat = !catId || p.category_id === catId;
+    const matchSearch = !search ||
+      p.name.toLowerCase().includes(search) ||
+      (p.sku || '').toLowerCase().includes(search) ||
+      (p.barcode || '').includes(search);
+    return matchCat && matchSearch;
+  });
+  renderProducts(filteredProducts);
+}
+
+async function handleBarcodeEnter(e) {
+  if (e.key !== 'Enter') return;
+  const val = e.target.value.trim();
+  if (!val) return;
+
+  // Try barcode first
+  const prod = await products.searchByBarcode(val, auth.currentStore?.id);
+  if (prod) {
+    addToCart(prod.id);
+    e.target.value = '';
+    return;
+  }
+
+  // Otherwise, filter
+  applyFilters(currentCategoryId, val.toLowerCase());
+}
+
+// ===== CART =====
+
+window.addToCart = function(productId) {
+  const product = allProducts.find(p => p.id === productId);
+  if (!product || !product.is_available) return;
+
+  const existing = cart.find(i => i.product_id === productId);
+  if (existing) {
+    if (existing.qty >= product.stock) {
+      showToast('Insufficient stock', 'warning');
+      return;
+    }
+    existing.qty++;
+    existing.line_total = existing.price * existing.qty - existing.discount;
+  } else {
+    cart.push({
+      product_id: productId,
+      name: product.name,
+      sku: product.sku,
+      price: product.price,
+      original_price: product.price,
+      cost: product.cost,
+      qty: 1,
+      discount: 0,
+      discount_type: 'fixed',
+      max_stock: product.stock,
+      line_total: product.price
+    });
+  }
+  renderCart();
+};
+
+window.removeFromCart = function(productId) {
+  cart = cart.filter(i => i.product_id !== productId);
+  renderCart();
+};
+
+window.changeQty = function(productId, delta) {
+  const item = cart.find(i => i.product_id === productId);
+  if (!item) return;
+  const newQty = item.qty + delta;
+  if (newQty <= 0) { removeFromCart(productId); return; }
+  if (newQty > item.max_stock) { showToast('Insufficient stock', 'warning'); return; }
+  item.qty = newQty;
+  item.line_total = item.price * item.qty - item.discount;
+  renderCart();
+};
+
+window.clearCart = function() {
+  if (!cart.length) return;
+  cart = [];
+  document.getElementById('txn-discount').value = '';
+  document.getElementById('customer-name').value = '';
+  document.getElementById('is-senior').checked = false;
+  renderCart();
+};
+
+function renderCart() {
+  const el = document.getElementById('cart-items');
+  if (!cart.length) {
+    el.innerHTML = '<div class="empty-state py-4"><i class="bi bi-cart" style="font-size:36px;"></i><div style="font-size:13px;margin-top:8px;">Cart is empty</div></div>';
+    document.getElementById('cart-count').textContent = '0 items';
+    updateCartTotals();
+    return;
+  }
+
+  const totalItems = cart.reduce((s, i) => s + i.qty, 0);
+  document.getElementById('cart-count').textContent = totalItems + (totalItems === 1 ? ' item' : ' items');
+
+  el.innerHTML = cart.map(item => `
+    <div class="cart-item">
+      <div class="cart-item-info">
+        <div class="cart-item-name">${item.name}</div>
+        <div class="cart-item-price">${formatPeso(item.price)} × ${item.qty}</div>
+      </div>
+      <div class="cart-item-controls">
+        <button class="qty-btn" onclick="changeQty('${item.product_id}', -1)">-</button>
+        <span class="qty-display">${item.qty}</span>
+        <button class="qty-btn" onclick="changeQty('${item.product_id}', 1)">+</button>
+      </div>
+      <div class="cart-item-total">${formatPeso(item.line_total)}</div>
+      <button class="cart-remove" onclick="removeFromCart('${item.product_id}')"><i class="bi bi-x"></i></button>
+    </div>
+  `).join('');
+
+  updateCartTotals();
+}
+
+window.recalcCart = function() { updateCartTotals(); };
+
+function updateCartTotals() {
+  const subtotal = cart.reduce((s, i) => s + i.line_total, 0);
+  let discountAmt = parseFloat(document.getElementById('txn-discount').value) || 0;
+  const discountType = document.getElementById('discount-type').value;
+  if (discountType === 'percent') discountAmt = subtotal * discountAmt / 100;
+  discountAmt = Math.min(discountAmt, subtotal);
+
+  let total = subtotal - discountAmt;
+  const isSenior = document.getElementById('is-senior').checked;
+  let seniorDiscount = 0;
+  if (isSenior && total > 0) {
+    seniorDiscount = computeSeniorDiscount(total);
+    total -= seniorDiscount;
+  }
+
+  const vat = computeVat(total, auth.currentStore?.vat_registered !== false);
+
+  document.getElementById('cart-subtotal').textContent = formatPeso(subtotal);
+  document.getElementById('cart-total').textContent = formatPeso(total);
+  document.getElementById('cart-vatable').textContent = formatPeso(vat.vatableSales);
+  document.getElementById('cart-vat').textContent = formatPeso(vat.vatAmount);
+
+  if (discountAmt > 0) {
+    document.getElementById('discount-row').style.display = 'flex';
+    document.getElementById('cart-discount').textContent = '-' + formatPeso(discountAmt);
+  } else {
+    document.getElementById('discount-row').style.display = 'none';
+  }
+
+  if (seniorDiscount > 0) {
+    document.getElementById('senior-row').style.display = 'flex';
+    document.getElementById('cart-senior').textContent = '-' + formatPeso(seniorDiscount);
+  } else {
+    document.getElementById('senior-row').style.display = 'none';
+  }
+
+  document.getElementById('btn-checkout').disabled = !cart.length || !currentSession;
+}
+
+// ===== CHECKOUT =====
+
+window.openCheckout = function() {
+  if (!cart.length) return;
+  if (!currentSession) { showToast('Open a session first', 'warning'); return; }
+
+  const subtotal = cart.reduce((s, i) => s + i.line_total, 0);
+  let discountAmt = parseFloat(document.getElementById('txn-discount').value) || 0;
+  const discountType = document.getElementById('discount-type').value;
+  if (discountType === 'percent') discountAmt = subtotal * discountAmt / 100;
+  let total = subtotal - Math.min(discountAmt, subtotal);
+
+  const isSenior = document.getElementById('is-senior').checked;
+  if (isSenior) total -= computeSeniorDiscount(total);
+
+  document.getElementById('co-subtotal').textContent = formatPeso(subtotal);
+  document.getElementById('co-total').textContent = formatPeso(total);
+  if (discountAmt > 0) {
+    document.getElementById('co-discount-row').style.display = 'flex';
+    document.getElementById('co-discount').textContent = '-' + formatPeso(discountAmt);
+  } else {
+    document.getElementById('co-discount-row').style.display = 'none';
+  }
+
+  document.getElementById('checkout-items-list').innerHTML = cart.map(i =>
+    `<div class="d-flex justify-content-between mb-1" style="font-size:12px;">
+      <span>${i.name} × ${i.qty}</span>
+      <span>${formatPeso(i.line_total)}</span>
+    </div>`
+  ).join('');
+
+  // Reset payment
+  document.getElementById('amount-tendered').value = total.toFixed(2);
+  selectedPaymentMethod = 'cash';
+  splitMode = false;
+  splitRows = [];
+  document.getElementById('split-payments-container').style.display = 'none';
+  document.querySelectorAll('.payment-method-btn').forEach(b => b.classList.remove('selected'));
+  document.querySelector('[data-method="cash"]').classList.add('selected');
+  updateGcashQrVisibility();
+  computeChange();
+
+  new bootstrap.Modal(document.getElementById('checkout-modal')).show();
+};
+
+window.selectPaymentMethod = function(method) {
+  selectedPaymentMethod = method;
+  document.querySelectorAll('.payment-method-btn').forEach(b => b.classList.remove('selected'));
+  document.querySelector(`[data-method="${method}"]`).classList.add('selected');
+  updateGcashQrVisibility();
+  const total = parseFloat(document.getElementById('co-total').textContent.replace(/[₱,]/g, '')) || 0;
+  document.getElementById('amount-tendered').value = total.toFixed(2);
+  computeChange();
+};
+
+function updateGcashQrVisibility() {
+  const container = document.getElementById('gcash-qr-container');
+  const image = document.getElementById('gcash-qr-image');
+  const caption = document.getElementById('gcash-qr-caption');
+  if (!container || !image || !caption) return;
+
+  if (selectedPaymentMethod !== 'gcash' || splitMode) {
+    container.style.display = 'none';
+    return;
+  }
+
+  const storeCode = auth.currentStore?.code || '';
+  const storeName = auth.currentStore?.name || 'Store';
+  const qrUrl = STORE_GCASH_QR_MAP[storeCode] || 'qr.jpeg';
+
+  image.src = qrUrl;
+  caption.textContent = `${storeName} • Show this QR to customer for GCash payment`;
+  container.style.display = 'block';
+}
+
+window.computeChange = function() {
+  const total = parseFloat(document.getElementById('co-total').textContent.replace(/[₱,]/g, '')) || 0;
+  const tendered = parseFloat(document.getElementById('amount-tendered').value) || 0;
+  const change = selectedPaymentMethod === 'cash' ? Math.max(0, tendered - total) : 0;
+  document.getElementById('co-tendered').textContent = formatPeso(tendered);
+  document.getElementById('co-change').textContent = formatPeso(change);
+};
+
+window.toggleSplitPayment = function() {
+  splitMode = !splitMode;
+  document.getElementById('split-payments-container').style.display = splitMode ? 'block' : 'none';
+  if (splitMode && splitRows.length === 0) addSplitRow();
+  updateGcashQrVisibility();
+};
+
+window.addSplitRow = function() {
+  const id = Date.now();
+  splitRows.push(id);
+  const container = document.getElementById('split-payment-rows');
+  container.innerHTML += `
+    <div class="d-flex gap-2 mb-2" id="split-${id}">
+      <select class="form-select form-select-sm" id="split-method-${id}" style="width:100px;">
+        <option value="cash">Cash</option>
+        <option value="gcash">GCash</option>
+      </select>
+      <input type="number" class="form-control form-control-sm" id="split-amount-${id}" placeholder="Amount" min="0" step="0.01">
+      <button class="btn btn-sm btn-danger" onclick="removeSplitRow(${id})"><i class="bi bi-x"></i></button>
+    </div>`;
+};
+
+window.removeSplitRow = function(id) {
+  document.getElementById('split-' + id)?.remove();
+  splitRows = splitRows.filter(r => r !== id);
+};
+
+window.completeSale = async function() {
+  const total = parseFloat(document.getElementById('co-total').textContent.replace(/[₱,]/g, '')) || 0;
+  let payments = [];
+
+  if (splitMode) {
+    splitRows.forEach(id => {
+      const method = document.getElementById('split-method-' + id)?.value;
+      const amount = parseFloat(document.getElementById('split-amount-' + id)?.value) || 0;
+      if (method && amount > 0) payments.push({ method, amount });
+    });
+  } else {
+    const tendered = parseFloat(document.getElementById('amount-tendered').value) || 0;
+    if (tendered < total) { showToast('Amount tendered is less than total', 'warning'); return; }
+    payments = [{ method: selectedPaymentMethod, amount: tendered }];
+  }
+
+  if (!payments.length) { showToast('Add payment details', 'warning'); return; }
+
+  const subtotal = cart.reduce((s, i) => s + i.line_total, 0);
+  let discountAmt = parseFloat(document.getElementById('txn-discount').value) || 0;
+  const discountType = document.getElementById('discount-type').value;
+  if (discountType === 'percent') discountAmt = subtotal * discountAmt / 100;
+  const isSenior = document.getElementById('is-senior').checked;
+
+  try {
+    showLoading('Processing sale...');
+    const sale = await sales.process({
+      storeId: auth.currentStore.id,
+      sessionId: currentSession.id,
+      cashierId: auth.currentUser.id,
+      items: cart,
+      payments,
+      discountTotal: Math.min(discountAmt, subtotal),
+      customerName: document.getElementById('customer-name').value.trim(),
+      isSenior,
+      isPwd: false,
+      notes: document.getElementById('payment-reference').value.trim()
+    });
+
+    currentSale = sale;
+    bootstrap.Modal.getInstance(document.getElementById('checkout-modal')).hide();
+
+    document.getElementById('receipt-txn-no').textContent = sale.txn_no;
+    document.getElementById('receipt-summary').textContent = formatPeso(sale.total) + ' — ' + sale.txn_no;
+    new bootstrap.Modal(document.getElementById('receipt-modal')).show();
+
+    // Reload products stock
+    loadProductsAndCategories();
+  } catch (err) {
+    showToast('Error: ' + err.message, 'danger');
+  } finally {
+    hideLoading();
+  }
+};
+
+window.printReceipt = function() {
+  if (!currentSale) return;
+  // Enrich with store/cashier data
+  const enriched = {
+    ...currentSale,
+    stores: auth.currentStore,
+    profiles: { full_name: auth.currentProfile?.full_name }
+  };
+  receipts.print(enriched);
+};
+
+window.resetForNextSale = function() {
+  clearCart();
+  currentSale = null;
+};
+
+// ===== RETURNS =====
+
+window.openReturns = function() {
+  returnSaleData = null;
+  document.getElementById('return-txn-search').value = '';
+  document.getElementById('return-sale-details').style.display = 'none';
+  document.getElementById('btn-process-return').style.display = 'none';
+  new bootstrap.Modal(document.getElementById('returns-modal')).show();
+};
+
+window.findSaleForReturn = async function() {
+  const txnNo = document.getElementById('return-txn-search').value.trim();
+  if (!txnNo) return;
+  try {
+    const { sales: salesMod } = await import('./src/js/pos.js');
+    const sale = await salesMod.getByTxnNo(txnNo);
+    if (!sale) { showToast('Sale not found', 'warning'); return; }
+    if (sale.status === 'voided') { showToast('This sale is already voided', 'warning'); return; }
+
+    returnSaleData = sale;
+    document.getElementById('return-sale-header').textContent = `TXN: ${sale.txn_no} — ${formatPeso(sale.total)}`;
+    document.getElementById('return-sale-details').style.display = 'block';
+    document.getElementById('btn-process-return').style.display = 'inline-block';
+
+    const tbody = document.getElementById('return-items-tbody');
+    tbody.innerHTML = (sale.sale_items || []).map(item => `
+      <tr>
+        <td><input type="checkbox" class="return-item-check" data-item-id="${item.id}" onchange="updateReturnTotal()"></td>
+        <td style="font-size:12px;">${item.product_name}</td>
+        <td>${item.qty}</td>
+        <td>${formatPeso(item.price)}</td>
+        <td><input type="number" class="form-control form-control-sm return-qty-input" data-item-id="${item.id}" data-price="${item.price}" data-max="${item.qty}" value="${item.qty}" min="1" max="${item.qty}" style="width:70px;" onchange="updateReturnTotal()"></td>
+      </tr>`).join('');
+  } catch (err) {
+    showToast('Error: ' + err.message, 'danger');
+  }
+};
+
+window.toggleSelectAll = function() {
+  const all = document.getElementById('return-select-all').checked;
+  document.querySelectorAll('.return-item-check').forEach(cb => cb.checked = all);
+  updateReturnTotal();
+};
+
+window.updateReturnTotal = function() {
+  let total = 0;
+  document.querySelectorAll('.return-item-check:checked').forEach(cb => {
+    const id = cb.dataset.itemId;
+    const qty = parseFloat(document.querySelector(`.return-qty-input[data-item-id="${id}"]`)?.value) || 0;
+    const price = parseFloat(cb.closest('tr').querySelector('.return-qty-input').dataset.price) || 0;
+    total += qty * price;
+  });
+  document.getElementById('return-total-display').textContent = `Refund Total: ${formatPeso(total)}`;
+};
+
+window.processReturn = async function() {
+  if (!returnSaleData) return;
+
+  const selectedItems = [];
+  document.querySelectorAll('.return-item-check:checked').forEach(cb => {
+    const id = cb.dataset.itemId;
+    const qty = parseFloat(document.querySelector(`.return-qty-input[data-item-id="${id}"]`)?.value) || 0;
+    const saleItem = returnSaleData.sale_items.find(i => i.id === id);
+    if (saleItem && qty > 0) {
+      selectedItems.push({
+        sale_item_id: id,
+        product_id: saleItem.product_id,
+        qty,
+        price: saleItem.price,
+        line_total: saleItem.price * qty
+      });
+    }
+  });
+
+  if (!selectedItems.length) { showToast('Select items to return', 'warning'); return; }
+
+  try {
+    showLoading('Processing return...');
+    const { sales: salesMod } = await import('./src/js/pos.js');
+    await salesMod.processReturn({
+      storeId: auth.currentStore.id,
+      saleId: returnSaleData.id,
+      cashierId: auth.currentUser.id,
+      items: selectedItems,
+      refundMethod: document.getElementById('return-refund-method').value,
+      reason: document.getElementById('return-reason').value,
+      restock: document.getElementById('return-restock').checked
+    });
+    bootstrap.Modal.getInstance(document.getElementById('returns-modal')).hide();
+    showToast('Return processed successfully!', 'success');
+    loadProductsAndCategories();
+  } catch (err) {
+    showToast('Error: ' + err.message, 'danger');
+  } finally {
+    hideLoading();
+  }
+};
+
+init();
+</script>
+</body>
+</html>

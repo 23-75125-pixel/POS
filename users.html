@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Users · PH-POS</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="src/css/main.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+</head>
+<body>
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-logo"><div class="logo-icon"><img src="https://placehold.co/96x96/111827/ffffff/png?text=POS" alt="PH-POS logo" class="logo-image"></div><div><div class="logo-text">PH-POS</div><div class="logo-sub">Multi-Store System</div></div></div>
+  <div class="sidebar-store"><label>ACTIVE STORE</label><select id="store-selector" class="form-select"></select></div>
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">Sales</div>
+    <a href="pos.html" class="nav-item" id="nav-pos" data-permission="pos.access"><i class="bi bi-grid-3x3-gap"></i> Point of Sale</a>
+    <a href="sales.html" class="nav-item" id="nav-sales" data-permission="sales.view"><i class="bi bi-receipt"></i> Sales History</a>
+    <a href="returns.html" class="nav-item" id="nav-returns" data-permission="pos.process_returns"><i class="bi bi-arrow-return-left"></i> Returns</a>
+    <div class="nav-section-label" data-permission="inventory.view">Inventory</div>
+    <a href="products.html" class="nav-item" id="nav-products" data-permission="products.view"><i class="bi bi-box-seam"></i> Products</a>
+    <a href="inventory.html" class="nav-item" id="nav-inventory" data-permission="inventory.view"><i class="bi bi-stack"></i> Inventory</a>
+    <div class="nav-section-label" data-permission="reports.view_store">Analytics</div>
+    <a href="reports.html" class="nav-item" id="nav-reports" data-permission="reports.view_store"><i class="bi bi-bar-chart-line"></i> Reports</a>
+    <a href="dashboard.html" class="nav-item" id="nav-dashboard" data-permission="dashboard.view"><i class="bi bi-speedometer2"></i> Dashboard</a>
+    <div class="nav-section-label" data-role="admin">Admin</div>
+    <a href="users.html" class="nav-item active" id="nav-users" data-role="admin"><i class="bi bi-people"></i> Users</a>
+    <a href="settings.html" class="nav-item" id="nav-settings" data-role="admin"><i class="bi bi-gear"></i> Settings</a>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="user-info"><div class="user-avatar" id="user-avatar-letter">U</div><div class="user-details"><div class="user-name" data-user-name>Loading...</div><div class="user-role" data-user-role>User</div></div></div>
+    <button class="btn btn-secondary btn-sm w-100" onclick="handleLogout()"><i class="bi bi-box-arrow-right"></i> Sign Out</button>
+  </div>
+</nav>
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+<div class="main-content">
+  <div class="top-bar">
+    <button class="btn btn-secondary btn-sm d-lg-none" onclick="toggleSidebar()"><i class="bi bi-list"></i></button>
+    <div class="top-bar-title">User Management</div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-secondary btn-sm" onclick="goBackPage()"><i class="bi bi-arrow-left"></i> Back</button>
+      <button class="btn btn-secondary btn-sm" onclick="goHomePage()"><i class="bi bi-house"></i> Home</button>
+      <button class="btn btn-secondary btn-sm" onclick="handleLogout()"><i class="bi bi-box-arrow-right"></i> Logout</button>
+    </div>
+  </div>
+  <div class="page-content">
+
+    <div class="section-header mb-3">
+      <div class="section-title">System Users</div>
+      <button class="btn btn-primary btn-sm" onclick="openUserModal()">
+        <i class="bi bi-person-plus me-1"></i>Create User
+      </button>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Store Access</th>
+            <th>Status</th>
+            <th>Created</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="users-tbody">
+          <tr><td colspan="7" class="text-center py-5"><div class="spinner-border spinner-border-sm mb-2"></div><br>Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Audit Logs -->
+    <div class="mt-4">
+      <div class="section-heading mb-3"><i class="bi bi-shield-check me-2" style="color:var(--accent);"></i>Recent Audit Logs</div>
+      <div class="table-responsive">
+        <table class="table table-sm">
+          <thead><tr><th>Date/Time</th><th>User</th><th>Action</th><th>Entity</th><th>Store</th></tr></thead>
+          <tbody id="audit-tbody">
+            <tr><td colspan="5" class="text-center py-3"><div class="spinner-border spinner-border-sm"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== CREATE USER MODAL ===== -->
+<div class="modal fade" id="user-modal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="user-modal-title">Create User</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="user-id">
+        <div class="mb-3">
+          <label class="form-label">Full Name *</label>
+          <input type="text" class="form-control" id="user-name" placeholder="Juan dela Cruz" required>
+        </div>
+        <div class="mb-3" id="email-row">
+          <label class="form-label">Email *</label>
+          <input type="email" class="form-control" id="user-email" placeholder="juan@store.ph">
+        </div>
+        <div class="mb-3" id="password-row">
+          <label class="form-label">Password *</label>
+          <input type="password" class="form-control" id="user-password" placeholder="Min 6 characters">
+          <div class="form-text">User can change this after login</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Role *</label>
+          <select class="form-select" id="user-role">
+            <option value="cashier">Cashier</option>
+            <option value="staff">Staff</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Store Access</label>
+          <div id="store-access-checkboxes" class="d-flex flex-wrap gap-2 mt-1"></div>
+          <div class="form-text">Admin has access to all stores automatically</div>
+        </div>
+        <div class="mb-3">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="user-active" checked>
+            <label class="form-check-label">Active</label>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" onclick="saveUser()">
+          <i class="bi bi-check-circle me-1"></i>Save User
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM MODAL -->
+<div class="modal fade" id="confirm-modal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title" id="confirm-title">Confirm</h5></div>
+      <div class="modal-body"><p id="confirm-message"></p></div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-danger" id="confirm-ok-btn">Confirm</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="loading-overlay" class="d-none">
+  <div class="loading-spinner"><div class="spinner-border mb-3"></div><div class="loading-text">Loading...</div></div>
+</div>
+<div id="toast-container"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script type="module">
+import auth from './src/js/auth.js';
+import rbac from './src/js/rbac.js';
+import { formatDate, showToast, showLoading, hideLoading, confirmDialog } from './src/js/utils.js';
+import db from './src/js/supabaseClient.js';
+
+window.handleLogout = () => auth.logout();
+window.goHomePage = () => {
+  window.location.href = 'index.html';
+};
+window.goBackPage = () => {
+  if (window.history.length > 1) window.history.back();
+  else goHomePage();
+};
+window.toggleSidebar = () => {
+  document.getElementById('sidebar').classList.toggle('show');
+  document.getElementById('sidebar-overlay').classList.toggle('show');
+};
+
+let allStores = [];
+let usersData = [];
+
+async function init() {
+  const session = await auth.init();
+  if (!session) { window.location.href = 'login.html'; return; }
+  if (!auth.hasRole('admin')) { window.location.href = 'dashboard.html'; return; }
+  rbac.updateUI();
+  const av = document.getElementById('user-avatar-letter');
+  if (av) av.textContent = (auth.currentProfile?.full_name || 'U')[0].toUpperCase();
+
+  const { data: stores } = await db.from('stores').select('*').order('name');
+  allStores = stores || [];
+
+  await Promise.all([loadUsers(), loadAuditLogs()]);
+}
+
+async function loadUsers() {
+  const { data: profiles, error: profilesError } = await db.from('profiles')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (profilesError) { showToast('Error loading users: ' + profilesError.message, 'danger'); return; }
+
+  const { data: accessRows, error: accessError } = await db.from('user_store_access')
+    .select('user_id, store_id, stores(name)');
+
+  if (accessError) { showToast('Error loading user store access: ' + accessError.message, 'danger'); return; }
+
+  const accessByUser = new Map();
+  (accessRows || []).forEach(row => {
+    if (!accessByUser.has(row.user_id)) accessByUser.set(row.user_id, []);
+    accessByUser.get(row.user_id).push(row);
+  });
+
+  usersData = (profiles || []).map(profile => ({
+    ...profile,
+    user_store_access: accessByUser.get(profile.id) || []
+  }));
+
+  renderUsers(usersData);
+}
+
+function renderUsers(users) {
+  const tbody = document.getElementById('users-tbody');
+  if (!users.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-5"><div class="empty-state"><i class="bi bi-people"></i><div>No users found</div></div></td></tr>';
+    return;
+  }
+  const roleColors = { admin: 'var(--accent)', manager: 'var(--info)', staff: 'var(--info)', cashier: 'var(--success)' };
+  const roleLabels = { admin: 'admin', manager: 'staff', staff: 'staff', cashier: 'cashier' };
+  tbody.innerHTML = users.map(u => {
+    const storeNames = u.role === 'admin' ? 'All Stores' :
+      (u.user_store_access || []).map(a => a.stores?.name).filter(Boolean).join(', ') || '—';
+    return `<tr>
+      <td>
+        <div class="d-flex align-items-center gap-2">
+          <div style="width:30px;height:30px;border-radius:50%;background:${roleColors[u.role]||'#888'}20;color:${roleColors[u.role]||'#888'};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex-shrink:0;">
+            ${(u.full_name || 'U')[0].toUpperCase()}
+          </div>
+          <span class="fw-bold" style="font-size:13px;">${u.full_name}</span>
+        </div>
+      </td>
+      <td style="font-size:12px;color:var(--text-muted);">—</td>
+      <td><span class="badge" style="background:${roleColors[u.role]||'#888'}20;color:${roleColors[u.role]||'#888'};font-size:11px;text-transform:capitalize;">${roleLabels[u.role] || u.role}</span></td>
+      <td style="font-size:12px;color:var(--text-muted);">${storeNames}</td>
+      <td><span class="badge ${u.is_active !== false ? 'status-completed' : 'status-closed'}" style="font-size:10px;">${u.is_active !== false ? 'Active' : 'Inactive'}</span></td>
+      <td style="font-size:12px;">${formatDate(u.created_at)}</td>
+      <td>
+        <button class="btn btn-sm btn-secondary" onclick="editUser('${u.id}')"><i class="bi bi-pencil"></i></button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function loadAuditLogs() {
+  const { data } = await db.from('audit_logs')
+    .select('*, profiles(full_name), stores(name)')
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  const tbody = document.getElementById('audit-tbody');
+  if (!data?.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center py-3" style="color:var(--text-muted);">No audit logs</td></tr>';
+    return;
+  }
+
+  const actionColors = {
+    login: 'var(--success)', logout: 'var(--text-muted)',
+    product_create: 'var(--info)', product_update: 'var(--warning)',
+    product_delete: 'var(--danger)', stock_adjustment: 'var(--accent)',
+    sale_void: 'var(--danger)', sale_return: 'var(--warning)',
+    session_open: 'var(--success)', session_close: 'var(--text-muted)'
+  };
+
+  tbody.innerHTML = data.map(log => `
+    <tr>
+      <td style="font-size:12px;">${formatDate(log.created_at, true)}</td>
+      <td style="font-size:12px;">${log.profiles?.full_name || '—'}</td>
+      <td><span style="font-size:12px;color:${actionColors[log.action]||'var(--text-muted)'};">${log.action}</span></td>
+      <td style="font-size:12px;color:var(--text-muted);">${log.entity_type || '—'}</td>
+      <td style="font-size:12px;">${log.stores?.name || '—'}</td>
+    </tr>`).join('');
+}
+
+window.openUserModal = function() {
+  document.getElementById('user-id').value = '';
+  document.getElementById('user-modal-title').textContent = 'Create User';
+  document.getElementById('user-name').value = '';
+  document.getElementById('user-email').value = '';
+  document.getElementById('user-password').value = '';
+  document.getElementById('user-role').value = 'cashier';
+  document.getElementById('user-active').checked = true;
+  document.getElementById('email-row').style.display = '';
+  document.getElementById('password-row').style.display = '';
+  renderStoreCheckboxes([]);
+  new bootstrap.Modal(document.getElementById('user-modal')).show();
+};
+
+window.editUser = function(userId) {
+  const user = usersData.find(u => u.id === userId);
+  if (!user) return;
+  document.getElementById('user-id').value = user.id;
+  document.getElementById('user-modal-title').textContent = 'Edit User';
+  document.getElementById('user-name').value = user.full_name;
+  document.getElementById('user-email').value = '';
+  document.getElementById('user-password').value = '';
+  document.getElementById('user-role').value = user.role;
+  document.getElementById('user-active').checked = user.is_active !== false;
+  document.getElementById('email-row').style.display = 'none';
+  document.getElementById('password-row').style.display = 'none';
+
+  const accessIds = (user.user_store_access || []).map(a => a.store_id);
+  renderStoreCheckboxes(accessIds);
+  new bootstrap.Modal(document.getElementById('user-modal')).show();
+};
+
+function renderStoreCheckboxes(selectedIds) {
+  const container = document.getElementById('store-access-checkboxes');
+  container.innerHTML = allStores.map(s => `
+    <div class="form-check">
+      <input class="form-check-input" type="checkbox" id="store-${s.id}" value="${s.id}" ${selectedIds.includes(s.id) ? 'checked' : ''}>
+      <label class="form-check-label" for="store-${s.id}" style="font-size:13px;">${s.name}</label>
+    </div>`).join('');
+}
+
+window.saveUser = async function() {
+  const userId = document.getElementById('user-id').value;
+  const name = document.getElementById('user-name').value.trim();
+  const email = document.getElementById('user-email').value.trim();
+  const password = document.getElementById('user-password').value;
+  const role = document.getElementById('user-role').value;
+  const isActive = document.getElementById('user-active').checked;
+
+  if (!name) { showToast('Enter full name', 'warning'); return; }
+
+  const selectedStores = Array.from(document.querySelectorAll('#store-access-checkboxes input:checked')).map(i => i.value);
+
+  try {
+    showLoading('Saving user...');
+
+    if (!userId) {
+      // Create new user via Edge Function (server-side service role)
+      if (!email || !password) { hideLoading(); showToast('Email and password required for new user', 'warning'); return; }
+      if (password.length < 6) { hideLoading(); showToast('Password must be at least 6 characters', 'warning'); return; }
+
+      const { data, error } = await db.functions.invoke('invite-user', {
+        body: {
+          email,
+          password,
+          full_name: name,
+          role,
+          is_active: isActive,
+          store_ids: selectedStores
+        }
+      });
+
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.error || 'Failed to create user');
+
+      showToast('User created successfully!', 'success');
+    } else {
+      // Update existing
+      await db.from('profiles').update({ full_name: name, role, is_active: isActive }).eq('id', userId);
+
+      // Update store access
+      await db.from('user_store_access').delete().eq('user_id', userId);
+      if (role !== 'admin' && selectedStores.length) {
+        await db.from('user_store_access').insert(selectedStores.map(sid => ({ user_id: userId, store_id: sid })));
+      }
+
+      showToast('User updated!', 'success');
+    }
+
+    bootstrap.Modal.getInstance(document.getElementById('user-modal')).hide();
+    await loadUsers();
+  } catch (err) {
+    showToast('Error: ' + err.message, 'danger');
+  } finally {
+    hideLoading();
+  }
+};
+
+init();
+</script>
+</body>
+</html>

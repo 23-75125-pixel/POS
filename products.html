@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Products · PH-POS</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="src/css/main.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon"><img src="https://placehold.co/96x96/111827/ffffff/png?text=POS" alt="PH-POS logo" class="logo-image"></div>
+    <div><div class="logo-text">PH-POS</div><div class="logo-sub">Multi-Store System</div></div>
+  </div>
+  <div class="sidebar-store">
+    <label>ACTIVE STORE</label>
+    <select id="store-selector" class="form-select"></select>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">Sales</div>
+    <a href="pos.html" class="nav-item" id="nav-pos" data-permission="pos.access"><i class="bi bi-grid-3x3-gap"></i> Point of Sale</a>
+    <a href="sales.html" class="nav-item" id="nav-sales" data-permission="sales.view"><i class="bi bi-receipt"></i> Sales History</a>
+    <a href="returns.html" class="nav-item" id="nav-returns" data-permission="pos.process_returns"><i class="bi bi-arrow-return-left"></i> Returns</a>
+    <div class="nav-section-label" data-permission="inventory.view">Inventory</div>
+    <a href="products.html" class="nav-item active" id="nav-products" data-permission="products.view"><i class="bi bi-box-seam"></i> Products</a>
+    <a href="inventory.html" class="nav-item" id="nav-inventory" data-permission="inventory.view"><i class="bi bi-stack"></i> Inventory</a>
+    <div class="nav-section-label" data-permission="reports.view_store">Analytics</div>
+    <a href="reports.html" class="nav-item" id="nav-reports" data-permission="reports.view_store"><i class="bi bi-bar-chart-line"></i> Reports</a>
+    <a href="dashboard.html" class="nav-item" id="nav-dashboard" data-permission="dashboard.view"><i class="bi bi-speedometer2"></i> Dashboard</a>
+    <div class="nav-section-label" data-role="admin">Admin</div>
+    <a href="users.html" class="nav-item" id="nav-users" data-role="admin"><i class="bi bi-people"></i> Users</a>
+    <a href="settings.html" class="nav-item" id="nav-settings" data-role="admin"><i class="bi bi-gear"></i> Settings</a>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="user-info">
+      <div class="user-avatar" id="user-avatar-letter">U</div>
+      <div class="user-details">
+        <div class="user-name" data-user-name>Loading...</div>
+        <div class="user-role" data-user-role>User</div>
+      </div>
+    </div>
+    <button class="btn btn-secondary btn-sm w-100" onclick="handleLogout()"><i class="bi bi-box-arrow-right"></i> Sign Out</button>
+  </div>
+</nav>
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+<!-- MAIN -->
+<div class="main-content">
+  <div class="top-bar">
+    <button class="btn btn-secondary btn-sm d-lg-none" onclick="toggleSidebar()"><i class="bi bi-list"></i></button>
+    <div class="top-bar-title">Products</div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-secondary btn-sm" onclick="goBackPage()"><i class="bi bi-arrow-left"></i> Back</button>
+      <button class="btn btn-secondary btn-sm" onclick="goHomePage()"><i class="bi bi-house"></i> Home</button>
+      <button class="btn btn-secondary btn-sm" onclick="handleLogout()"><i class="bi bi-box-arrow-right"></i> Logout</button>
+    </div>
+  </div>
+  <div class="page-content">
+    <div class="section-header">
+      <div class="section-title">Product Catalog</div>
+      <div class="d-flex gap-2 flex-wrap">
+        <button class="btn btn-secondary btn-sm" onclick="exportProducts()"><i class="bi bi-download me-1"></i>Export CSV</button>
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('csv-import').click()"><i class="bi bi-upload me-1"></i>Import CSV</button>
+        <input type="file" id="csv-import" accept=".csv" style="display:none;" onchange="importProducts(this)">
+        <button class="btn btn-primary btn-sm" onclick="openProductModal()" data-permission="products.create">
+          <i class="bi bi-plus-circle me-1"></i>Add Product
+        </button>
+      </div>
+    </div>
+
+    <!-- Filter bar -->
+    <div class="d-flex gap-3 mb-3 flex-wrap align-items-center">
+      <div class="search-wrapper search-sm">
+        <i class="bi bi-search"></i>
+        <input type="text" class="form-control" id="search-input" placeholder="Search products..." oninput="filterProducts()">
+      </div>
+      <select class="form-select" id="cat-filter" style="width:180px;" onchange="filterProducts()">
+        <option value="">All Categories</option>
+      </select>
+      <select class="form-select" id="status-filter" style="width:140px;" onchange="filterProducts()">
+        <option value="active">Active Only</option>
+        <option value="all">All Products</option>
+        <option value="inactive">Inactive</option>
+      </select>
+      <div class="ms-auto text-muted" id="product-count">Loading...</div>
+    </div>
+
+    <!-- Products Table -->
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>SKU / Barcode</th>
+            <th>Category</th>
+            <th>Unit</th>
+            <th class="text-end" data-permission="inventory.view_cost">Cost</th>
+            <th class="text-end">Price</th>
+            <th class="text-end">Stock</th>
+            <th>VAT</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="products-tbody">
+          <tr><td colspan="10" class="text-center py-5"><div class="spinner-border spinner-border-sm mb-2"></div><br>Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ======= PRODUCT MODAL ======= -->
+<div class="modal fade" id="product-modal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="product-modal-title">Add Product</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="product-id">
+        <div class="row g-3">
+          <div class="col-md-8">
+            <label class="form-label">Product Name *</label>
+            <input type="text" class="form-control" id="product-name" required placeholder="e.g. Mineral Water 500ml">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Category</label>
+            <select class="form-select" id="product-category">
+              <option value="">Select category</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">SKU *</label>
+            <input type="text" class="form-control" id="product-sku" required placeholder="PROD001">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Barcode</label>
+            <input type="text" class="form-control" id="product-barcode" placeholder="4800888000001">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Unit</label>
+            <select class="form-select" id="product-unit">
+              <option value="pcs">pcs</option>
+              <option value="kg">kg</option>
+              <option value="g">g</option>
+              <option value="bottle">bottle</option>
+              <option value="box">box</option>
+              <option value="pack">pack</option>
+              <option value="liter">liter</option>
+              <option value="dozen">dozen</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Cost Price (₱) *</label>
+            <input type="number" class="form-control" id="product-cost" placeholder="0.00" min="0" step="0.01">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Selling Price (₱) *</label>
+            <input type="number" class="form-control" id="product-price" placeholder="0.00" min="0" step="0.01" required>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">VAT</label>
+            <div class="form-check mt-2">
+              <input class="form-check-input" type="checkbox" id="product-vat" checked>
+              <label class="form-check-label">VAT Inclusive (12%)</label>
+            </div>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Description</label>
+            <textarea class="form-control" id="product-desc" rows="2" placeholder="Optional description..."></textarea>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Status</label>
+            <div class="form-check mt-2">
+              <input class="form-check-input" type="checkbox" id="product-active" checked>
+              <label class="form-check-label">Active (available for sale)</label>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" onclick="saveProduct()">
+          <i class="bi bi-check-circle me-1"></i>Save Product
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE CONFIRM -->
+<div class="modal fade" id="confirm-modal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title" id="confirm-title">Confirm</h5></div>
+      <div class="modal-body"><p id="confirm-message"></p></div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-danger" id="confirm-ok-btn">Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="loading-overlay" class="d-none">
+  <div class="loading-spinner"><div class="spinner-border mb-3"></div><div class="loading-text">Loading...</div></div>
+</div>
+<div id="toast-container"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script type="module">
+import auth from './src/js/auth.js';
+import rbac from './src/js/rbac.js';
+import { products, categories } from './src/js/products.js';
+import { formatPeso, showToast, showLoading, hideLoading, confirmDialog, validateForm } from './src/js/utils.js';
+import db from './src/js/supabaseClient.js';
+
+window.handleLogout = () => auth.logout();
+window.goHomePage = () => {
+  window.location.href = 'index.html';
+};
+window.goBackPage = () => {
+  if (window.history.length > 1) window.history.back();
+  else goHomePage();
+};
+window.toggleSidebar = () => {
+  document.getElementById('sidebar').classList.toggle('show');
+  document.getElementById('sidebar-overlay').classList.toggle('show');
+};
+
+let allProducts = [];
+let allCategories = [];
+let realtimeChannel = null;
+let realtimeReloadTimer = null;
+
+async function init() {
+  const session = await auth.init();
+  if (!session) { window.location.href = 'login.html'; return; }
+  if (!auth.hasRole('admin')) { window.location.href = auth.hasRole('cashier') ? 'pos.html' : 'inventory.html'; return; }
+  rbac.updateUI();
+  const av = document.getElementById('user-avatar-letter');
+  if (av) av.textContent = (auth.currentProfile?.full_name || 'U')[0].toUpperCase();
+
+  await Promise.all([loadCategories(), loadProducts()]);
+  setupRealtime();
+}
+
+async function loadCategories() {
+  allCategories = await categories.getAll();
+  const catFilter = document.getElementById('cat-filter');
+  const productCat = document.getElementById('product-category');
+  catFilter.innerHTML = '<option value="">All Categories</option>';
+  productCat.innerHTML = '<option value="">Select category</option>';
+  allCategories.forEach(c => {
+    catFilter.innerHTML += `<option value="${c.id}">${c.name}</option>`;
+    productCat.innerHTML += `<option value="${c.id}">${c.name}</option>`;
+  });
+}
+
+function scheduleRealtimeReload() {
+  clearTimeout(realtimeReloadTimer);
+  realtimeReloadTimer = setTimeout(async () => {
+    await Promise.all([loadCategories(), loadProducts()]);
+  }, 300);
+}
+
+function setupRealtime() {
+  if (!auth.currentStore?.id) return;
+  if (realtimeChannel) db.removeChannel(realtimeChannel);
+
+  realtimeChannel = db
+    .channel(`products-live-${auth.currentStore.id}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, scheduleRealtimeReload)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, scheduleRealtimeReload)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'store_products', filter: `store_id=eq.${auth.currentStore.id}` },
+      scheduleRealtimeReload
+    )
+    .subscribe();
+}
+
+window.addEventListener('beforeunload', () => {
+  if (realtimeChannel) db.removeChannel(realtimeChannel);
+});
+
+async function loadProducts() {
+  try {
+    const showAll = document.getElementById('status-filter').value === 'all' ||
+                    document.getElementById('status-filter').value === 'inactive';
+    allProducts = await products.getWithStock(auth.currentStore?.id);
+    filterProducts();
+  } catch (err) {
+    showToast('Error loading products: ' + err.message, 'danger');
+  }
+}
+
+window.filterProducts = function() {
+  const search = document.getElementById('search-input').value.toLowerCase();
+  const catId = document.getElementById('cat-filter').value;
+  const status = document.getElementById('status-filter').value;
+
+  const filtered = allProducts.filter(p => {
+    const matchSearch = !search || p.name.toLowerCase().includes(search) ||
+      (p.sku || '').toLowerCase().includes(search) || (p.barcode || '').includes(search);
+    const matchCat = !catId || p.category_id === catId;
+    const matchStatus = status === 'all' || (status === 'active' ? p.is_active : !p.is_active);
+    return matchSearch && matchCat && matchStatus;
+  });
+
+  document.getElementById('product-count').textContent = filtered.length + ' products';
+  renderProducts(filtered);
+};
+
+function renderProducts(prods) {
+  const tbody = document.getElementById('products-tbody');
+  if (!prods.length) {
+    tbody.innerHTML = '<tr><td colspan="10" class="text-center py-5"><div class="empty-state"><i class="bi bi-inbox"></i><div>No products found</div></div></td></tr>';
+    return;
+  }
+
+  const canEdit = rbac.can('products.edit');
+  const canDelete = rbac.can('products.delete');
+  const canViewCost = rbac.can('inventory.view_cost');
+
+  tbody.innerHTML = prods.map(p => {
+    const isLow = p.stock <= p.reorder_level;
+    const isOut = p.stock === 0;
+    return `<tr>
+      <td>
+        <div class="fw-bold" style="font-size:13px;">${p.name}</div>
+        <div style="font-size:11px;color:var(--text-muted);">${p.description || ''}</div>
+      </td>
+      <td style="font-size:12px;">
+        <div>${p.sku}</div>
+        <div style="color:var(--text-muted);">${p.barcode || ''}</div>
+      </td>
+      <td><span class="badge" style="background:${p.categories?.color||'#6b7280'}20;color:${p.categories?.color||'#6b7280'};font-size:11px;">${p.categories?.name||'—'}</span></td>
+      <td style="font-size:12px;">${p.unit}</td>
+      <td class="text-end" style="font-size:12px;" ${canViewCost ? '' : 'data-permission="inventory.view_cost"'}>${formatPeso(p.cost)}</td>
+      <td class="text-end fw-bold" style="font-size:13px;">${formatPeso(p.price)}</td>
+      <td class="text-end"><span style="font-size:13px;color:${isOut?'var(--danger)':isLow?'var(--warning)':'var(--success)'};">${p.stock}</span></td>
+      <td><span class="badge ${p.vat_inclusive ? 'status-completed' : 'status-closed'}" style="font-size:10px;">${p.vat_inclusive ? 'VAT-Inc' : 'No VAT'}</span></td>
+      <td><span class="badge ${p.is_active ? 'status-completed' : 'status-closed'}" style="font-size:10px;">${p.is_active ? 'Active' : 'Inactive'}</span></td>
+      <td>
+        <div class="d-flex gap-1">
+          ${canEdit ? `<button class="btn btn-sm btn-secondary" onclick="editProduct('${p.id}')" title="Edit"><i class="bi bi-pencil"></i></button>` : ''}
+          ${canDelete ? `<button class="btn btn-sm btn-danger" onclick="deleteProduct('${p.id}', '${p.name.replace(/'/g,"\\'")}') " title="Delete"><i class="bi bi-trash"></i></button>` : ''}
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+window.openProductModal = function() {
+  document.getElementById('product-id').value = '';
+  document.getElementById('product-modal-title').textContent = 'Add Product';
+  document.getElementById('product-name').value = '';
+  document.getElementById('product-sku').value = '';
+  document.getElementById('product-barcode').value = '';
+  document.getElementById('product-cost').value = '';
+  document.getElementById('product-price').value = '';
+  document.getElementById('product-desc').value = '';
+  document.getElementById('product-vat').checked = true;
+  document.getElementById('product-active').checked = true;
+  document.getElementById('product-category').value = '';
+  document.getElementById('product-unit').value = 'pcs';
+  new bootstrap.Modal(document.getElementById('product-modal')).show();
+};
+
+window.editProduct = function(id) {
+  const p = allProducts.find(x => x.id === id);
+  if (!p) return;
+  document.getElementById('product-id').value = p.id;
+  document.getElementById('product-modal-title').textContent = 'Edit Product';
+  document.getElementById('product-name').value = p.name;
+  document.getElementById('product-sku').value = p.sku;
+  document.getElementById('product-barcode').value = p.barcode || '';
+  document.getElementById('product-cost').value = p.cost;
+  document.getElementById('product-price').value = p.price;
+  document.getElementById('product-desc').value = p.description || '';
+  document.getElementById('product-vat').checked = p.vat_inclusive;
+  document.getElementById('product-active').checked = p.is_active;
+  document.getElementById('product-category').value = p.category_id || '';
+  document.getElementById('product-unit').value = p.unit;
+  new bootstrap.Modal(document.getElementById('product-modal')).show();
+};
+
+window.saveProduct = async function() {
+  const form = document.getElementById('product-modal');
+  const name = document.getElementById('product-name').value.trim();
+  const sku = document.getElementById('product-sku').value.trim();
+  const price = parseFloat(document.getElementById('product-price').value);
+
+  if (!name || !sku || isNaN(price)) {
+    showToast('Fill in required fields (Name, SKU, Price)', 'warning');
+    return;
+  }
+
+  const data = {
+    name,
+    sku,
+    barcode: document.getElementById('product-barcode').value.trim() || null,
+    cost: parseFloat(document.getElementById('product-cost').value) || 0,
+    price,
+    description: document.getElementById('product-desc').value.trim() || null,
+    vat_inclusive: document.getElementById('product-vat').checked,
+    is_active: document.getElementById('product-active').checked,
+    category_id: document.getElementById('product-category').value || null,
+    unit: document.getElementById('product-unit').value
+  };
+
+  try {
+    showLoading('Saving...');
+    const id = document.getElementById('product-id').value;
+    if (id) {
+      await products.update(id, data);
+      showToast('Product updated!', 'success');
+    } else {
+      await products.create(data);
+      showToast('Product created!', 'success');
+    }
+    bootstrap.Modal.getInstance(document.getElementById('product-modal')).hide();
+    await loadProducts();
+  } catch (err) {
+    showToast('Error: ' + err.message, 'danger');
+  } finally {
+    hideLoading();
+  }
+};
+
+window.deleteProduct = async function(id, name) {
+  const confirmed = await confirmDialog('Delete Product', `Delete "${name}"? This will deactivate the product.`);
+  if (!confirmed) return;
+  try {
+    showLoading('Deleting...');
+    await products.delete(id);
+    showToast('Product deleted!', 'success');
+    await loadProducts();
+  } catch (err) {
+    showToast('Error: ' + err.message, 'danger');
+  } finally {
+    hideLoading();
+  }
+};
+
+window.exportProducts = function() {
+  products.exportToCSV(auth.currentStore?.id);
+};
+
+window.importProducts = async function(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const text = await file.text();
+  try {
+    showLoading('Importing...');
+    const result = await products.importFromCSV(text, auth.currentStore?.id);
+    showToast(`Imported: ${result.success} success, ${result.failed} failed`, result.failed > 0 ? 'warning' : 'success');
+    if (result.errors.length) console.warn('Import errors:', result.errors);
+    await loadProducts();
+  } catch (err) {
+    showToast('Import error: ' + err.message, 'danger');
+  } finally {
+    hideLoading();
+    input.value = '';
+  }
+};
+
+init();
+</script>
+</body>
+</html>

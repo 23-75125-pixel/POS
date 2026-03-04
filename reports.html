@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reports · PH-POS</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="src/css/main.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="config.js"></script>
+  <style>
+    .reports-controls .form-control,
+    .reports-controls .form-select {
+      width: 150px;
+    }
+
+    #daily-chart,
+    #category-chart {
+      max-width: 100%;
+    }
+
+    @media (max-width: 992px) {
+      .reports-controls {
+        align-items: stretch !important;
+      }
+
+      .reports-controls > div,
+      .reports-controls > button {
+        width: 100%;
+      }
+
+      .reports-controls .form-control,
+      .reports-controls .form-select,
+      .reports-controls .btn {
+        width: 100% !important;
+      }
+
+      .reports-controls .ms-auto {
+        margin-left: 0 !important;
+        width: 100%;
+      }
+
+      .reports-controls .ms-auto .btn {
+        flex: 1;
+      }
+    }
+
+    @media (max-width: 576px) {
+      #kpi-revenue,
+      #kpi-cost,
+      #kpi-profit,
+      #kpi-vat {
+        font-size: 14px !important;
+      }
+
+      #kpi-txns,
+      #kpi-margin {
+        font-size: 18px !important;
+      }
+    }
+  </style>
+</head>
+<body>
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-logo"><div class="logo-icon"><img src="https://placehold.co/96x96/111827/ffffff/png?text=POS" alt="PH-POS logo" class="logo-image"></div><div><div class="logo-text">PH-POS</div><div class="logo-sub">Multi-Store System</div></div></div>
+  <div class="sidebar-store"><label>ACTIVE STORE</label><select id="store-selector" class="form-select"></select></div>
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">Sales</div>
+    <a href="pos.html" class="nav-item" id="nav-pos" data-permission="pos.access"><i class="bi bi-grid-3x3-gap"></i> Point of Sale</a>
+    <a href="sales.html" class="nav-item" id="nav-sales" data-permission="sales.view"><i class="bi bi-receipt"></i> Sales History</a>
+    <a href="returns.html" class="nav-item" id="nav-returns" data-permission="pos.process_returns"><i class="bi bi-arrow-return-left"></i> Returns</a>
+    <div class="nav-section-label" data-permission="inventory.view">Inventory</div>
+    <a href="products.html" class="nav-item" id="nav-products" data-permission="products.view"><i class="bi bi-box-seam"></i> Products</a>
+    <a href="inventory.html" class="nav-item" id="nav-inventory" data-permission="inventory.view"><i class="bi bi-stack"></i> Inventory</a>
+    <div class="nav-section-label" data-permission="reports.view_store">Analytics</div>
+    <a href="reports.html" class="nav-item active" id="nav-reports" data-permission="reports.view_store"><i class="bi bi-bar-chart-line"></i> Reports</a>
+    <a href="dashboard.html" class="nav-item" id="nav-dashboard" data-permission="dashboard.view"><i class="bi bi-speedometer2"></i> Dashboard</a>
+    <div class="nav-section-label" data-role="admin">Admin</div>
+    <a href="users.html" class="nav-item" id="nav-users" data-role="admin"><i class="bi bi-people"></i> Users</a>
+    <a href="settings.html" class="nav-item" id="nav-settings" data-role="admin"><i class="bi bi-gear"></i> Settings</a>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="user-info"><div class="user-avatar" id="user-avatar-letter">U</div><div class="user-details"><div class="user-name" data-user-name>Loading...</div><div class="user-role" data-user-role>User</div></div></div>
+    <button class="btn btn-secondary btn-sm w-100" onclick="handleLogout()"><i class="bi bi-box-arrow-right"></i> Sign Out</button>
+  </div>
+</nav>
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+<div class="main-content">
+  <div class="top-bar">
+    <button class="btn btn-secondary btn-sm d-lg-none" onclick="toggleSidebar()"><i class="bi bi-list"></i></button>
+    <div class="top-bar-title">Reports & Analytics</div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-secondary btn-sm" onclick="goBackPage()"><i class="bi bi-arrow-left"></i> Back</button>
+      <button class="btn btn-secondary btn-sm" onclick="goHomePage()"><i class="bi bi-house"></i> Home</button>
+      <button class="btn btn-secondary btn-sm" onclick="handleLogout()"><i class="bi bi-box-arrow-right"></i> Logout</button>
+    </div>
+  </div>
+  <div class="page-content">
+
+    <!-- Controls -->
+    <div class="d-flex gap-2 mb-4 flex-wrap align-items-end reports-controls">
+      <div>
+        <label class="form-label mb-1">From</label>
+        <input type="date" class="form-control form-control-sm" id="date-from">
+      </div>
+      <div>
+        <label class="form-label mb-1">To</label>
+        <input type="date" class="form-control form-control-sm" id="date-to">
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="loadReports()">
+        <i class="bi bi-search me-1"></i>Generate
+      </button>
+      <div class="ms-auto d-flex gap-2">
+        <button class="btn btn-secondary btn-sm" onclick="setRange('today')">Today</button>
+        <button class="btn btn-secondary btn-sm" onclick="setRange('week')">7 Days</button>
+        <button class="btn btn-secondary btn-sm" onclick="setRange('month')">This Month</button>
+        <button class="btn btn-secondary btn-sm" onclick="exportReport()"><i class="bi bi-download me-1"></i>Export</button>
+      </div>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="row g-3 mb-4">
+      <div class="col-6 col-md-2">
+        <div class="stat-card text-center">
+          <div class="stat-label">Transactions</div>
+          <div class="stat-value" id="kpi-txns" style="font-size:20px;">—</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-2">
+        <div class="stat-card text-center">
+          <div class="stat-label">Revenue</div>
+          <div class="stat-value" id="kpi-revenue" style="font-size:16px;">—</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-2">
+        <div class="stat-card text-center">
+          <div class="stat-label">Cost</div>
+          <div class="stat-value" id="kpi-cost" style="font-size:16px;color:var(--warning);">—</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-2">
+        <div class="stat-card text-center">
+          <div class="stat-label">Gross Profit</div>
+          <div class="stat-value" id="kpi-profit" style="font-size:16px;color:var(--success);">—</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-2">
+        <div class="stat-card text-center">
+          <div class="stat-label">Margin</div>
+          <div class="stat-value" id="kpi-margin" style="font-size:20px;color:var(--accent);">—</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-2">
+        <div class="stat-card text-center">
+          <div class="stat-label">VAT Collected</div>
+          <div class="stat-value" id="kpi-vat" style="font-size:16px;color:var(--info);">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-3">
+      <!-- Daily Sales Chart -->
+      <div class="col-12 col-lg-8">
+        <div class="card">
+          <div class="section-heading mb-3"><i class="bi bi-bar-chart me-2" style="color:var(--accent);"></i>Daily Sales</div>
+          <canvas id="daily-chart" height="100"></canvas>
+        </div>
+      </div>
+
+      <!-- Category Pie -->
+      <div class="col-12 col-lg-4">
+        <div class="card">
+          <div class="section-heading mb-3"><i class="bi bi-pie-chart me-2" style="color:var(--warning);"></i>Sales by Category</div>
+          <canvas id="category-chart" height="160"></canvas>
+          <div id="category-legend" class="mt-2"></div>
+        </div>
+      </div>
+
+      <!-- Payment Methods -->
+      <div class="col-12 col-lg-4">
+        <div class="card">
+          <div class="section-heading mb-3"><i class="bi bi-credit-card me-2" style="color:var(--info);"></i>Payment Methods</div>
+          <div id="payment-breakdown-report"></div>
+        </div>
+      </div>
+
+      <!-- Top Products -->
+      <div class="col-12 col-lg-8">
+        <div class="card">
+          <div class="section-header mb-3">
+            <div class="section-heading"><i class="bi bi-trophy me-2" style="color:var(--warning);"></i>Top 10 Products</div>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm">
+              <thead><tr><th>#</th><th>Product</th><th class="text-end">Qty Sold</th><th class="text-end">Revenue</th><th class="text-end">Profit</th></tr></thead>
+              <tbody id="top-products-tbody"><tr><td colspan="5" class="text-center py-3 text-muted">Generate report to view data</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Inventory Valuation -->
+      <div class="col-12">
+        <div class="card">
+          <div class="section-header mb-3">
+            <div class="section-heading"><i class="bi bi-box-seam me-2" style="color:var(--success);"></i>Inventory Valuation</div>
+            <button class="btn btn-secondary btn-sm" onclick="loadInventoryValuation()"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button>
+          </div>
+          <div class="row g-3 mb-3">
+            <div class="col-md-4">
+              <div class="card text-center py-2 surface-soft">
+                <div class="mini-muted">COST VALUE</div>
+                <div class="fw-bold metric-number" style="color:var(--warning);" id="inv-cost-val">—</div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card text-center py-2 surface-soft">
+                <div class="mini-muted">RETAIL VALUE</div>
+                <div class="fw-bold metric-number" style="color:var(--success);" id="inv-retail-val">—</div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card text-center py-2 surface-soft">
+                <div class="mini-muted">POTENTIAL PROFIT</div>
+                <div class="fw-bold metric-number" style="color:var(--accent);" id="inv-profit-val">—</div>
+              </div>
+            </div>
+          </div>
+          <div class="table-responsive" id="inv-table-container" style="display:none;">
+            <table class="table table-sm">
+              <thead><tr><th>Product</th><th>SKU</th><th class="text-end">Stock</th><th class="text-end">Cost/Unit</th><th class="text-end">Price/Unit</th><th class="text-end">Cost Value</th><th class="text-end">Retail Value</th></tr></thead>
+              <tbody id="inv-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="loading-overlay" class="d-none">
+  <div class="loading-spinner"><div class="spinner-border mb-3"></div><div class="loading-text">Loading...</div></div>
+</div>
+<div id="toast-container"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script type="module">
+import auth from './src/js/auth.js';
+import rbac from './src/js/rbac.js';
+import reportsModule from './src/js/reports.js';
+import { formatPeso, showToast, showLoading, hideLoading, getCurrentMonthRange, getLastNDays, exportToCSV } from './src/js/utils.js';
+import db from './src/js/supabaseClient.js';
+
+window.handleLogout = () => auth.logout();
+window.goHomePage = () => {
+  window.location.href = 'index.html';
+};
+window.goBackPage = () => {
+  if (window.history.length > 1) window.history.back();
+  else goHomePage();
+};
+window.toggleSidebar = () => {
+  document.getElementById('sidebar').classList.toggle('show');
+  document.getElementById('sidebar-overlay').classList.toggle('show');
+};
+
+let dailyChartInstance = null;
+let categoryChartInstance = null;
+let reportData = null;
+let realtimeChannel = null;
+let realtimeReloadTimer = null;
+
+async function init() {
+  const session = await auth.init();
+  if (!session) { window.location.href = 'login.html'; return; }
+  if (!auth.hasRole('admin')) { window.location.href = auth.hasRole('cashier') ? 'pos.html' : 'inventory.html'; return; }
+  rbac.updateUI();
+  const av = document.getElementById('user-avatar-letter');
+  if (av) av.textContent = (auth.currentProfile?.full_name || 'U')[0].toUpperCase();
+
+  setRange('month', false);
+  await loadReports();
+  setupRealtime();
+}
+
+function scheduleReportsRealtimeRefresh() {
+  clearTimeout(realtimeReloadTimer);
+  realtimeReloadTimer = setTimeout(async () => {
+    await loadReports();
+  }, 400);
+}
+
+function setupRealtime() {
+  if (!auth.currentStore?.id) return;
+  if (realtimeChannel) db.removeChannel(realtimeChannel);
+
+  realtimeChannel = db
+    .channel(`reports-live-${auth.currentStore.id}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'sales', filter: `store_id=eq.${auth.currentStore.id}` },
+      scheduleReportsRealtimeRefresh
+    )
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'sale_items' }, scheduleReportsRealtimeRefresh)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'store_products', filter: `store_id=eq.${auth.currentStore.id}` },
+      scheduleReportsRealtimeRefresh
+    )
+    .subscribe();
+}
+
+window.addEventListener('beforeunload', () => {
+  if (realtimeChannel) db.removeChannel(realtimeChannel);
+});
+
+window.setRange = function(range, reload = true) {
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+  if (range === 'today') {
+    document.getElementById('date-from').value = today;
+    document.getElementById('date-to').value = today;
+  } else if (range === 'week') {
+    const r = getLastNDays(7);
+    document.getElementById('date-from').value = r.first;
+    document.getElementById('date-to').value = r.last;
+  } else if (range === 'month') {
+    const r = getCurrentMonthRange();
+    document.getElementById('date-from').value = r.first;
+    document.getElementById('date-to').value = r.last;
+  }
+  if (reload) loadReports();
+};
+
+window.loadReports = async function() {
+  const storeId = auth.currentStore?.id;
+  const dateFrom = document.getElementById('date-from').value;
+  const dateTo = document.getElementById('date-to').value;
+  if (!storeId || !dateFrom || !dateTo) return;
+
+  try {
+    showLoading('Generating report...');
+    const [{ summary }, topProds, catSales, payBreakdown, dailySales] = await Promise.all([
+      reportsModule.getSalesSummary(storeId, dateFrom, dateTo),
+      reportsModule.getTopProducts(storeId, dateFrom, dateTo, 10),
+      reportsModule.getCategorySales(storeId, dateFrom, dateTo),
+      reportsModule.getPaymentBreakdown(storeId, dateFrom, dateTo),
+      reportsModule.getDailySales(storeId, dateFrom, dateTo)
+    ]);
+
+    reportData = { summary, topProds, catSales, payBreakdown, dailySales };
+
+    // KPIs
+    document.getElementById('kpi-txns').textContent = summary.totalTransactions;
+    document.getElementById('kpi-revenue').textContent = formatPeso(summary.totalRevenue);
+    document.getElementById('kpi-cost').textContent = formatPeso(summary.totalCost);
+    document.getElementById('kpi-profit').textContent = formatPeso(summary.grossProfit);
+    document.getElementById('kpi-margin').textContent = summary.grossMargin.toFixed(1) + '%';
+    document.getElementById('kpi-vat').textContent = formatPeso(summary.totalVat);
+
+    renderDailyChart(dailySales);
+    renderCategoryChart(catSales);
+    renderPaymentBreakdown(payBreakdown);
+    renderTopProducts(topProds);
+  } catch (err) {
+    showToast('Error: ' + err.message, 'danger');
+  } finally {
+    hideLoading();
+  }
+};
+
+function renderDailyChart(data) {
+  const ctx = document.getElementById('daily-chart').getContext('2d');
+  if (dailyChartInstance) dailyChartInstance.destroy();
+  dailyChartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: data.map(d => d.date),
+      datasets: [{
+        label: 'Sales (₱)',
+        data: data.map(d => d.total),
+        backgroundColor: 'rgba(99,102,241,0.6)',
+        borderColor: '#6366f1',
+        borderWidth: 1,
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#94a3b8', font: { size: 11 } }, grid: { color: '#334155' } },
+        y: { ticks: { color: '#94a3b8', font: { size: 11 }, callback: v => '₱' + v.toLocaleString() }, grid: { color: '#334155' } }
+      }
+    }
+  });
+}
+
+function renderCategoryChart(data) {
+  const ctx = document.getElementById('category-chart').getContext('2d');
+  if (categoryChartInstance) categoryChartInstance.destroy();
+  if (!data.length) return;
+  categoryChartInstance = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: data.map(d => d.name),
+      datasets: [{
+        data: data.map(d => d.revenue),
+        backgroundColor: data.map(d => d.color || '#6366f1'),
+        borderWidth: 2,
+        borderColor: '#1e293b'
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ' ₱' + ctx.raw.toLocaleString() } }
+      }
+    }
+  });
+  const total = data.reduce((s, d) => s + d.revenue, 0);
+  document.getElementById('category-legend').innerHTML = data.map(d => `
+    <div class="d-flex justify-content-between align-items-center mb-1">
+      <div class="d-flex align-items-center gap-2">
+        <div style="width:10px;height:10px;border-radius:50%;background:${d.color};flex-shrink:0;"></div>
+        <span style="font-size:12px;">${d.name}</span>
+      </div>
+      <span style="font-size:12px;font-weight:600;">${total > 0 ? (d.revenue/total*100).toFixed(1) : 0}%</span>
+    </div>`).join('');
+}
+
+function renderPaymentBreakdown(data) {
+  const el = document.getElementById('payment-breakdown-report');
+  if (!data.length) { el.innerHTML = '<div class="text-center py-4" style="color:var(--text-muted);">No data</div>'; return; }
+  const icons = { cash: '💵', gcash: '📱', maya: '🔵', card: '💳' };
+  const total = data.reduce((s, p) => s + p.amount, 0);
+  el.innerHTML = data.map(p => `
+    <div class="d-flex align-items-center gap-2 mb-3">
+      <div style="font-size:22px;">${icons[p.method] || '💰'}</div>
+      <div style="flex:1;">
+        <div class="d-flex justify-content-between">
+          <span style="font-size:13px;font-weight:600;text-transform:capitalize;">${p.method}</span>
+          <span style="font-size:13px;font-weight:700;">${formatPeso(p.amount)}</span>
+        </div>
+        <div style="height:5px;background:var(--border);border-radius:3px;margin-top:4px;">
+          <div style="height:100%;width:${total > 0 ? (p.amount/total*100).toFixed(0) : 0}%;background:var(--accent);border-radius:3px;"></div>
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);">${p.count} txns · ${total > 0 ? (p.amount/total*100).toFixed(1) : 0}%</div>
+      </div>
+    </div>`).join('');
+}
+
+function renderTopProducts(data) {
+  const tbody = document.getElementById('top-products-tbody');
+  if (!data.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center py-3" style="color:var(--text-muted);">No data</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.map((p, i) => `
+    <tr>
+      <td style="color:var(--text-muted);font-weight:700;">#${i+1}</td>
+      <td style="font-size:13px;font-weight:500;">${p.name}</td>
+      <td class="text-end" style="font-size:13px;">${p.qty}</td>
+      <td class="text-end fw-bold" style="font-size:13px;">${formatPeso(p.revenue)}</td>
+      <td class="text-end" style="font-size:13px;color:var(--success);">${formatPeso(p.profit)}</td>
+    </tr>`).join('');
+}
+
+window.loadInventoryValuation = async function() {
+  try {
+    const val = await reportsModule.getInventoryValuation(auth.currentStore?.id);
+    document.getElementById('inv-cost-val').textContent = formatPeso(val.totalCostValue);
+    document.getElementById('inv-retail-val').textContent = formatPeso(val.totalRetailValue);
+    document.getElementById('inv-profit-val').textContent = formatPeso(val.totalRetailValue - val.totalCostValue);
+
+    const container = document.getElementById('inv-table-container');
+    container.style.display = '';
+    document.getElementById('inv-tbody').innerHTML = val.items.map(i => `
+      <tr>
+        <td style="font-size:13px;font-weight:500;">${i.name}</td>
+        <td style="font-size:12px;color:var(--text-muted);">${i.sku}</td>
+        <td class="text-end" style="font-size:13px;">${i.stock}</td>
+        <td class="text-end" style="font-size:12px;">${formatPeso(i.cost)}</td>
+        <td class="text-end" style="font-size:12px;">${formatPeso(i.price)}</td>
+        <td class="text-end" style="font-size:12px;color:var(--warning);">${formatPeso(i.costValue)}</td>
+        <td class="text-end fw-bold" style="font-size:12px;color:var(--success);">${formatPeso(i.retailValue)}</td>
+      </tr>`).join('');
+  } catch (err) {
+    showToast('Error: ' + err.message, 'danger');
+  }
+};
+
+window.exportReport = function() {
+  if (!reportData) { showToast('Generate a report first', 'warning'); return; }
+  reportsModule.exportSalesCSV(
+    auth.currentStore?.id,
+    document.getElementById('date-from').value,
+    document.getElementById('date-to').value
+  );
+};
+
+init();
+</script>
+</body>
+</html>

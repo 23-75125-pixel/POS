@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sales History · PH-POS</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="src/css/main.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+</head>
+<body>
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-logo"><div class="logo-icon"><img src="https://placehold.co/96x96/111827/ffffff/png?text=POS" alt="PH-POS logo" class="logo-image"></div><div><div class="logo-text">PH-POS</div><div class="logo-sub">Multi-Store System</div></div></div>
+  <div class="sidebar-store"><label>ACTIVE STORE</label><select id="store-selector" class="form-select"></select></div>
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">Sales</div>
+    <a href="pos.html" class="nav-item" id="nav-pos" data-permission="pos.access"><i class="bi bi-grid-3x3-gap"></i> Point of Sale</a>
+    <a href="sales.html" class="nav-item active" id="nav-sales" data-permission="sales.view"><i class="bi bi-receipt"></i> Sales History</a>
+    <a href="returns.html" class="nav-item" id="nav-returns" data-permission="pos.process_returns"><i class="bi bi-arrow-return-left"></i> Returns</a>
+    <div class="nav-section-label" data-permission="inventory.view">Inventory</div>
+    <a href="products.html" class="nav-item" id="nav-products" data-permission="products.view"><i class="bi bi-box-seam"></i> Products</a>
+    <a href="inventory.html" class="nav-item" id="nav-inventory" data-permission="inventory.view"><i class="bi bi-stack"></i> Inventory</a>
+    <div class="nav-section-label" data-permission="reports.view_store">Analytics</div>
+    <a href="reports.html" class="nav-item" id="nav-reports" data-permission="reports.view_store"><i class="bi bi-bar-chart-line"></i> Reports</a>
+    <a href="dashboard.html" class="nav-item" id="nav-dashboard" data-permission="dashboard.view"><i class="bi bi-speedometer2"></i> Dashboard</a>
+    <div class="nav-section-label" data-role="admin">Admin</div>
+    <a href="users.html" class="nav-item" id="nav-users" data-role="admin"><i class="bi bi-people"></i> Users</a>
+    <a href="settings.html" class="nav-item" id="nav-settings" data-role="admin"><i class="bi bi-gear"></i> Settings</a>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="user-info"><div class="user-avatar" id="user-avatar-letter">U</div><div class="user-details"><div class="user-name" data-user-name>Loading...</div><div class="user-role" data-user-role>User</div></div></div>
+    <button class="btn btn-secondary btn-sm w-100" onclick="handleLogout()"><i class="bi bi-box-arrow-right"></i> Sign Out</button>
+  </div>
+</nav>
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+<div class="main-content">
+  <div class="top-bar">
+    <button class="btn btn-secondary btn-sm d-lg-none" onclick="toggleSidebar()"><i class="bi bi-list"></i></button>
+    <div class="top-bar-title">Sales History</div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-secondary btn-sm" onclick="goBackPage()"><i class="bi bi-arrow-left"></i> Back</button>
+      <button class="btn btn-secondary btn-sm" onclick="goHomePage()"><i class="bi bi-house"></i> Home</button>
+      <button class="btn btn-secondary btn-sm" onclick="handleLogout()"><i class="bi bi-box-arrow-right"></i> Logout</button>
+    </div>
+  </div>
+  <div class="page-content">
+
+    <!-- Filters -->
+    <div class="d-flex gap-2 mb-3 flex-wrap align-items-end">
+      <div>
+        <label class="form-label mb-1">From</label>
+        <input type="date" class="form-control form-control-sm" id="date-from" style="width:150px;">
+      </div>
+      <div>
+        <label class="form-label mb-1">To</label>
+        <input type="date" class="form-control form-control-sm" id="date-to" style="width:150px;">
+      </div>
+      <div>
+        <label class="form-label mb-1">Status</label>
+        <select class="form-select form-select-sm" id="status-filter" style="width:140px;">
+          <option value="">All</option>
+          <option value="completed">Completed</option>
+          <option value="voided">Voided</option>
+          <option value="returned">Returned</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label mb-1">Search</label>
+        <input type="text" class="form-control form-control-sm" id="txn-search" placeholder="TXN number..." style="width:200px;">
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="loadSales()">
+        <i class="bi bi-search me-1"></i>Search
+      </button>
+      <button class="btn btn-secondary btn-sm ms-auto" onclick="exportSales()">
+        <i class="bi bi-download me-1"></i>Export CSV
+      </button>
+    </div>
+
+    <!-- Summary bar -->
+    <div class="row g-3 mb-3" id="summary-bar" style="display:none;">
+      <div class="col-6 col-md-3">
+        <div class="card py-2 text-center">
+          <div class="mini-muted">TRANSACTIONS</div>
+          <div class="fw-bold metric-number" id="sum-txns">0</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card py-2 text-center">
+          <div class="mini-muted">TOTAL SALES</div>
+          <div class="fw-bold metric-number" style="color:var(--success);" id="sum-total">₱0.00</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card py-2 text-center">
+          <div class="mini-muted">DISCOUNTS</div>
+          <div class="fw-bold metric-number" style="color:var(--warning);" id="sum-discount">₱0.00</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card py-2 text-center">
+          <div class="mini-muted">VAT COLLECTED</div>
+          <div class="fw-bold metric-number" style="color:var(--accent);" id="sum-vat">₱0.00</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>TXN No.</th>
+            <th>Date / Time</th>
+            <th>Cashier</th>
+            <th>Customer</th>
+            <th class="text-end">Subtotal</th>
+            <th class="text-end">Discount</th>
+            <th class="text-end">Total</th>
+            <th>Payment</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="sales-tbody">
+          <tr><td colspan="10" class="text-center py-4 text-muted">Set a date range and click Search</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SALE DETAIL MODAL ===== -->
+<div class="modal fade" id="sale-detail-modal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Transaction Details</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="sale-detail-body">Loading...</div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button class="btn btn-primary" id="btn-print-receipt" onclick="printSaleReceipt()">
+          <i class="bi bi-printer me-1"></i>Print Receipt
+        </button>
+        <button class="btn btn-danger" id="btn-void-sale" data-permission="pos.void_transaction" onclick="voidCurrentSale()">
+          <i class="bi bi-x-circle me-1"></i>Void
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- VOID REASON MODAL -->
+<div class="modal fade" id="void-modal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Void Transaction</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <label class="form-label">Reason for voiding *</label>
+        <textarea class="form-control" id="void-reason" rows="3" placeholder="Enter reason..."></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-danger" onclick="confirmVoid()">Confirm Void</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="loading-overlay" class="d-none">
+  <div class="loading-spinner"><div class="spinner-border mb-3"></div><div class="loading-text">Loading...</div></div>
+</div>
+<div id="toast-container"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script type="module">
+import auth from './src/js/auth.js';
+import rbac from './src/js/rbac.js';
+import { sales } from './src/js/pos.js';
+import receipts from './src/js/receipts.js';
+import { formatPeso, formatDate, showToast, showLoading, hideLoading, exportToCSV } from './src/js/utils.js';
+import db from './src/js/supabaseClient.js';
+
+window.handleLogout = () => auth.logout();
+window.goHomePage = () => {
+  window.location.href = 'index.html';
+};
+window.goBackPage = () => {
+  if (window.history.length > 1) window.history.back();
+  else goHomePage();
+};
+window.toggleSidebar = () => {
+  document.getElementById('sidebar').classList.toggle('show');
+  document.getElementById('sidebar-overlay').classList.toggle('show');
+};
+
+let salesData = [];
+let currentDetailSale = null;
+let realtimeChannel = null;
+let realtimeReloadTimer = null;
+
+async function init() {
+  const session = await auth.init();
+  if (!session) { window.location.href = 'login.html'; return; }
+  if (!auth.hasRole('admin', 'staff')) { window.location.href = 'pos.html'; return; }
+  rbac.updateUI();
+  const av = document.getElementById('user-avatar-letter');
+  if (av) av.textContent = (auth.currentProfile?.full_name || 'U')[0].toUpperCase();
+
+  // Default today
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+  document.getElementById('date-from').value = today;
+  document.getElementById('date-to').value = today;
+
+  // Check URL param
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('txn')) {
+    document.getElementById('txn-search').value = params.get('txn');
+  }
+
+  await loadSales();
+  setupRealtime();
+}
+
+function scheduleSalesRealtimeRefresh() {
+  clearTimeout(realtimeReloadTimer);
+  realtimeReloadTimer = setTimeout(async () => {
+    await loadSales();
+  }, 300);
+}
+
+function setupRealtime() {
+  if (!auth.currentStore?.id) return;
+  if (realtimeChannel) db.removeChannel(realtimeChannel);
+
+  realtimeChannel = db
+    .channel(`sales-live-${auth.currentStore.id}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'sales', filter: `store_id=eq.${auth.currentStore.id}` },
+      scheduleSalesRealtimeRefresh
+    )
+    .subscribe();
+}
+
+window.addEventListener('beforeunload', () => {
+  if (realtimeChannel) db.removeChannel(realtimeChannel);
+});
+
+window.loadSales = async function() {
+  const dateFrom = document.getElementById('date-from').value;
+  const dateTo = document.getElementById('date-to').value;
+  const status = document.getElementById('status-filter').value;
+  const txnSearch = document.getElementById('txn-search').value.trim();
+
+  const tbody = document.getElementById('sales-tbody');
+  tbody.innerHTML = '<tr><td colspan="10" class="text-center py-3"><div class="spinner-border spinner-border-sm"></div></td></tr>';
+
+  try {
+    let q = db.from('sales')
+      .select('*, profiles(full_name)')
+      .eq('store_id', auth.currentStore?.id)
+      .order('created_at', { ascending: false })
+      .limit(300);
+
+    if (dateFrom) q = q.gte('created_at', dateFrom + 'T00:00:00');
+    if (dateTo) q = q.lte('created_at', dateTo + 'T23:59:59');
+    if (status) q = q.eq('status', status);
+    if (txnSearch) q = q.ilike('txn_no', '%' + txnSearch + '%');
+
+    const { data, error } = await q;
+    if (error) throw error;
+    salesData = data || [];
+    renderSalesTable(salesData);
+    updateSummaryBar(salesData);
+  } catch (err) {
+    showToast('Error: ' + err.message, 'danger');
+    tbody.innerHTML = `<tr><td colspan="10" class="text-center py-4" style="color:var(--danger);">Error: ${err.message}</td></tr>`;
+  }
+};
+
+function updateSummaryBar(data) {
+  const completed = data.filter(s => s.status === 'completed');
+  document.getElementById('summary-bar').style.display = '';
+  document.getElementById('sum-txns').textContent = completed.length;
+  document.getElementById('sum-total').textContent = formatPeso(completed.reduce((s, r) => s + r.total, 0));
+  document.getElementById('sum-discount').textContent = formatPeso(completed.reduce((s, r) => s + (r.discount_total || 0), 0));
+  document.getElementById('sum-vat').textContent = formatPeso(completed.reduce((s, r) => s + (r.vat_amount || 0), 0));
+}
+
+function renderSalesTable(data) {
+  const tbody = document.getElementById('sales-tbody');
+  if (!data.length) {
+    tbody.innerHTML = '<tr><td colspan="10" class="text-center py-5"><div class="empty-state"><i class="bi bi-inbox"></i><div>No transactions found</div></div></td></tr>';
+    return;
+  }
+  const payIcons = { cash: '💵', gcash: '📱', maya: '🔵', card: '💳' };
+  tbody.innerHTML = data.map(s => {
+    const payments = Array.isArray(s.payment_json) ? s.payment_json : [];
+    const payDisplay = payments.map(p => `${payIcons[p.method] || '💰'} ${p.method}`).join(', ');
+    return `<tr>
+      <td><a href="#" style="color:var(--accent);text-decoration:none;font-weight:600;" onclick="viewSale('${s.id}')">${s.txn_no}</a></td>
+      <td style="font-size:12px;">${formatDate(s.created_at, true)}</td>
+      <td style="font-size:12px;">${s.profiles?.full_name || '—'}</td>
+      <td style="font-size:12px;">${s.customer_name || '—'}</td>
+      <td class="text-end" style="font-size:12px;">${formatPeso(s.subtotal)}</td>
+      <td class="text-end" style="font-size:12px;color:var(--warning);">${s.discount_total > 0 ? '-' + formatPeso(s.discount_total) : '—'}</td>
+      <td class="text-end fw-bold">${formatPeso(s.total)}</td>
+      <td style="font-size:12px;">${payDisplay}</td>
+      <td><span class="badge status-${s.status}" style="font-size:11px;">${s.status}</span></td>
+      <td>
+        <div class="d-flex gap-1">
+          <button class="btn btn-sm btn-secondary" onclick="viewSale('${s.id}')" title="View"><i class="bi bi-eye"></i></button>
+          ${s.status === 'completed' && rbac.can('pos.void_transaction') ? `<button class="btn btn-sm btn-danger" onclick="quickVoid('${s.id}')" title="Void"><i class="bi bi-x-circle"></i></button>` : ''}
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+window.viewSale = async function(saleId) {
+  try {
+    currentDetailSale = await sales.getById(saleId);
+    if (!currentDetailSale) { showToast('Sale not found', 'warning'); return; }
+
+    const s = currentDetailSale;
+    const payments = Array.isArray(s.payment_json) ? s.payment_json : [];
+
+    document.getElementById('sale-detail-body').innerHTML = `
+      <div class="row g-3">
+        <div class="col-md-6">
+          <div class="mb-1"><strong>TXN No:</strong> <span style="color:var(--accent);">${s.txn_no}</span></div>
+          <div class="mb-1"><strong>Date:</strong> ${formatDate(s.created_at, true)}</div>
+          <div class="mb-1"><strong>Cashier:</strong> ${s.profiles?.full_name || '—'}</div>
+          <div class="mb-1"><strong>Store:</strong> ${s.stores?.name || auth.currentStore?.name || '—'}</div>
+          ${s.customer_name ? `<div class="mb-1"><strong>Customer:</strong> ${s.customer_name}</div>` : ''}
+          ${s.is_senior ? `<div class="mb-1"><strong>Discount:</strong> Senior/PWD (20%)</div>` : ''}
+          <div class="mb-1"><strong>Status:</strong> <span class="badge status-${s.status}">${s.status}</span></div>
+          ${s.void_reason ? `<div class="mb-1"><strong>Void Reason:</strong> ${s.void_reason}</div>` : ''}
+        </div>
+        <div class="col-md-6">
+          <div class="card" style="background:var(--bg-primary);">
+            <div class="d-flex justify-content-between mb-1" style="font-size:13px;"><span>Subtotal</span><span>${formatPeso(s.subtotal)}</span></div>
+            ${s.discount_total > 0 ? `<div class="d-flex justify-content-between mb-1" style="font-size:13px;"><span>Discount</span><span style="color:var(--warning);">-${formatPeso(s.discount_total)}</span></div>` : ''}
+            <div class="d-flex justify-content-between mb-1" style="font-size:13px;"><span>VATable Sales</span><span>${formatPeso(s.vatable_sales)}</span></div>
+            <div class="d-flex justify-content-between mb-1" style="font-size:13px;"><span>VAT (12%)</span><span>${formatPeso(s.vat_amount)}</span></div>
+            <div class="d-flex justify-content-between fw-bold" style="font-size:16px;border-top:1px solid var(--border);padding-top:8px;margin-top:4px;"><span>TOTAL</span><span style="color:var(--accent);">${formatPeso(s.total)}</span></div>
+            <hr>
+            ${payments.map(p => `<div class="d-flex justify-content-between" style="font-size:13px;"><span style="text-transform:capitalize;">${p.method}</span><span>${formatPeso(p.amount)}</span></div>`).join('')}
+            ${s.change_amount > 0 ? `<div class="d-flex justify-content-between" style="font-size:13px;color:var(--success);"><span>Change</span><span>${formatPeso(s.change_amount)}</span></div>` : ''}
+          </div>
+        </div>
+        <div class="col-12">
+          <div class="fw-bold mb-2">Items</div>
+          <div class="table-responsive">
+            <table class="table table-sm">
+              <thead><tr><th>Product</th><th class="text-end">Price</th><th class="text-end">Qty</th><th class="text-end">Discount</th><th class="text-end">Total</th></tr></thead>
+              <tbody>
+                ${(s.sale_items || []).map(i => `<tr>
+                  <td style="font-size:12px;">${i.product_name}</td>
+                  <td class="text-end" style="font-size:12px;">${formatPeso(i.price)}</td>
+                  <td class="text-end" style="font-size:12px;">${i.qty}</td>
+                  <td class="text-end" style="font-size:12px;color:var(--warning);">${i.discount > 0 ? '-' + formatPeso(i.discount) : '—'}</td>
+                  <td class="text-end fw-bold" style="font-size:12px;">${formatPeso(i.line_total)}</td>
+                </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>`;
+
+    document.getElementById('btn-void-sale').style.display =
+      s.status === 'completed' && rbac.can('pos.void_transaction') ? '' : 'none';
+
+    new bootstrap.Modal(document.getElementById('sale-detail-modal')).show();
+  } catch (err) {
+    showToast('Error: ' + err.message, 'danger');
+  }
+};
+
+window.printSaleReceipt = function() {
+  if (!currentDetailSale) return;
+  const enriched = {
+    ...currentDetailSale,
+    stores: currentDetailSale.stores || auth.currentStore,
+    profiles: currentDetailSale.profiles
+  };
+  receipts.print(enriched);
+};
+
+window.voidCurrentSale = function() {
+  document.getElementById('void-reason').value = '';
+  new bootstrap.Modal(document.getElementById('void-modal')).show();
+};
+
+window.quickVoid = function(saleId) {
+  currentDetailSale = { id: saleId };
+  document.getElementById('void-reason').value = '';
+  new bootstrap.Modal(document.getElementById('void-modal')).show();
+};
+
+window.confirmVoid = async function() {
+  const reason = document.getElementById('void-reason').value.trim();
+  if (!reason) { showToast('Enter a reason for voiding', 'warning'); return; }
+  try {
+    showLoading('Voiding transaction...');
+    await sales.voidSale(currentDetailSale.id, reason);
+    bootstrap.Modal.getInstance(document.getElementById('void-modal'))?.hide();
+    bootstrap.Modal.getInstance(document.getElementById('sale-detail-modal'))?.hide();
+    showToast('Transaction voided!', 'success');
+    await loadSales();
+  } catch (err) {
+    showToast('Error: ' + err.message, 'danger');
+  } finally {
+    hideLoading();
+  }
+};
+
+window.exportSales = function() {
+  if (!salesData.length) { showToast('No data to export', 'warning'); return; }
+  const rows = salesData.map(s => ({
+    txn_no: s.txn_no,
+    date: s.created_at,
+    cashier: s.profiles?.full_name || '',
+    customer: s.customer_name || '',
+    subtotal: s.subtotal,
+    discount: s.discount_total,
+    vat: s.vat_amount,
+    total: s.total,
+    payment: JSON.stringify(s.payment_json),
+    status: s.status
+  }));
+  exportToCSV(rows, `sales_${auth.currentStore?.code || ''}_${new Date().toISOString().split('T')[0]}`);
+};
+
+// expose rbac for inline use
+window.rbac = { can: (p) => ['admin'].includes(auth.currentProfile?.role) };
+
+init();
+</script>
+</body>
+</html>

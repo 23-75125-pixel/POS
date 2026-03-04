@@ -1,0 +1,73 @@
+<!-- src/pages/_layout.html - Reference sidebar/nav snippet -->
+<!--
+  SHARED SIDEBAR STRUCTURE (copy into each page)
+  Replace [ACTIVE_PAGE] with the active nav item class
+-->
+
+<!-- SIDEBAR -->
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon"><img src="https://placehold.co/96x96/111827/ffffff/png?text=POS" alt="PH-POS logo" class="logo-image"></div>
+    <div>
+      <div class="logo-text">PH-POS</div>
+      <div class="logo-sub">Multi-Store System</div>
+    </div>
+  </div>
+
+  <div class="sidebar-store">
+    <label>ACTIVE STORE</label>
+    <select id="store-selector" class="form-select"></select>
+  </div>
+
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">Sales</div>
+    <a href="../../pos.html" class="nav-item" id="nav-pos" data-permission="pos.access">
+      <i class="bi bi-grid-3x3-gap"></i> Point of Sale
+    </a>
+    <a href="../../sales.html" class="nav-item" id="nav-sales" data-permission="sales.view">
+      <i class="bi bi-receipt"></i> Sales History
+    </a>
+    <a href="../../returns.html" class="nav-item" id="nav-returns" data-permission="pos.process_returns">
+      <i class="bi bi-arrow-return-left"></i> Returns
+    </a>
+
+    <div class="nav-section-label" data-permission="inventory.view">Inventory</div>
+    <a href="../../products.html" class="nav-item" id="nav-products" data-permission="products.view">
+      <i class="bi bi-box-seam"></i> Products
+    </a>
+    <a href="../../inventory.html" class="nav-item" id="nav-inventory" data-permission="inventory.view">
+      <i class="bi bi-stack"></i> Inventory
+    </a>
+
+    <div class="nav-section-label" data-permission="reports.view_store">Analytics</div>
+    <a href="../../reports.html" class="nav-item" id="nav-reports" data-permission="reports.view_store">
+      <i class="bi bi-bar-chart-line"></i> Reports
+    </a>
+    <a href="../../dashboard.html" class="nav-item" id="nav-dashboard" data-permission="dashboard.view">
+      <i class="bi bi-speedometer2"></i> Dashboard
+    </a>
+
+    <div class="nav-section-label" data-role="admin">Admin</div>
+    <a href="../../users.html" class="nav-item" id="nav-users" data-role="admin">
+      <i class="bi bi-people"></i> Users
+    </a>
+    <a href="../../settings.html" class="nav-item" id="nav-settings" data-role="admin">
+      <i class="bi bi-gear"></i> Settings
+    </a>
+  </nav>
+
+  <div class="sidebar-footer">
+    <div class="user-info">
+      <div class="user-avatar" id="user-avatar-letter">U</div>
+      <div class="user-details">
+        <div class="user-name" data-user-name>Loading...</div>
+        <div class="user-role" data-user-role>User</div>
+      </div>
+    </div>
+    <button class="btn btn-secondary btn-sm w-100" onclick="handleLogout()">
+      <i class="bi bi-box-arrow-right"></i> Sign Out
+    </button>
+  </div>
+</nav>
+
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>

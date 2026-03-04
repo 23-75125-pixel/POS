@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard · PH-POS</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="src/css/main.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon"><img src="https://placehold.co/96x96/111827/ffffff/png?text=POS" alt="PH-POS logo" class="logo-image"></div>
+    <div>
+      <div class="logo-text">PH-POS</div>
+      <div class="logo-sub">Multi-Store System</div>
+    </div>
+  </div>
+  <div class="sidebar-store">
+    <label>ACTIVE STORE</label>
+    <select id="store-selector" class="form-select"></select>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">Sales</div>
+    <a href="pos.html" class="nav-item" id="nav-pos" data-permission="pos.access"><i class="bi bi-grid-3x3-gap"></i> Point of Sale</a>
+    <a href="sales.html" class="nav-item" id="nav-sales" data-permission="sales.view"><i class="bi bi-receipt"></i> Sales History</a>
+    <a href="returns.html" class="nav-item" id="nav-returns" data-permission="pos.process_returns"><i class="bi bi-arrow-return-left"></i> Returns</a>
+    <div class="nav-section-label" data-permission="inventory.view">Inventory</div>
+    <a href="products.html" class="nav-item" id="nav-products" data-permission="products.view"><i class="bi bi-box-seam"></i> Products</a>
+    <a href="inventory.html" class="nav-item" id="nav-inventory" data-permission="inventory.view"><i class="bi bi-stack"></i> Inventory</a>
+    <div class="nav-section-label" data-permission="reports.view_store">Analytics</div>
+    <a href="reports.html" class="nav-item" id="nav-reports" data-permission="reports.view_store"><i class="bi bi-bar-chart-line"></i> Reports</a>
+    <a href="dashboard.html" class="nav-item active" id="nav-dashboard" data-permission="dashboard.view"><i class="bi bi-speedometer2"></i> Dashboard</a>
+    <div class="nav-section-label" data-role="admin">Admin</div>
+    <a href="users.html" class="nav-item" id="nav-users" data-role="admin"><i class="bi bi-people"></i> Users</a>
+    <a href="settings.html" class="nav-item" id="nav-settings" data-role="admin"><i class="bi bi-gear"></i> Settings</a>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="user-info">
+      <div class="user-avatar" id="user-avatar-letter">U</div>
+      <div class="user-details">
+        <div class="user-name" data-user-name>Loading...</div>
+        <div class="user-role" data-user-role>User</div>
+      </div>
+    </div>
+    <button class="btn btn-secondary btn-sm w-100" onclick="handleLogout()">
+      <i class="bi bi-box-arrow-right"></i> Sign Out
+    </button>
+  </div>
+</nav>
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+<!-- MAIN CONTENT -->
+<div class="main-content">
+  <div class="top-bar">
+    <button class="btn btn-secondary btn-sm d-lg-none" onclick="toggleSidebar()">
+      <i class="bi bi-list"></i>
+    </button>
+    <div class="top-bar-title">Dashboard</div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-secondary btn-sm" onclick="goBackPage()"><i class="bi bi-arrow-left"></i> Back</button>
+      <button class="btn btn-secondary btn-sm" onclick="goHomePage()"><i class="bi bi-house"></i> Home</button>
+      <button class="btn btn-secondary btn-sm" onclick="handleLogout()"><i class="bi bi-box-arrow-right"></i> Logout</button>
+    </div>
+    <div class="text-muted" id="current-datetime"></div>
+  </div>
+
+  <div class="page-content">
+    <!-- Date filter -->
+    <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
+      <div>
+        <label class="form-label mb-1">Date Range</label>
+        <div class="d-flex gap-2">
+          <input type="date" class="form-control form-control-sm" id="date-from" style="width:150px;">
+          <input type="date" class="form-control form-control-sm" id="date-to" style="width:150px;">
+          <button class="btn btn-primary btn-sm" onclick="loadDashboard()">
+            <i class="bi bi-search"></i>
+          </button>
+        </div>
+      </div>
+      <div class="ms-auto d-flex gap-2">
+        <button class="btn btn-secondary btn-sm" onclick="setRange('today')">Today</button>
+        <button class="btn btn-secondary btn-sm" onclick="setRange('week')">This Week</button>
+        <button class="btn btn-secondary btn-sm" onclick="setRange('month')">This Month</button>
+      </div>
+    </div>
+
+    <!-- Low stock alert banner -->
+    <div id="low-stock-banner" class="low-stock-alert mb-4 d-none">
+      <i class="bi bi-exclamation-triangle-fill"></i>
+      <span id="low-stock-text">Some products are low on stock.</span>
+      <a href="inventory.html" class="ms-auto text-warning text-decoration-none fw-bold" style="font-size:12px;">View <i class="bi bi-arrow-right"></i></a>
+    </div>
+
+    <!-- Stats Grid -->
+    <div class="row g-3 mb-4">
+      <div class="col-6 col-md-3">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:rgba(99,102,241,0.15);color:#6366f1;">
+            <i class="bi bi-cash-stack"></i>
+          </div>
+          <div class="stat-label">Total Sales</div>
+          <div class="stat-value" id="stat-sales">₱0.00</div>
+          <div class="mini-muted" id="stat-txns">0 transactions</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:rgba(16,185,129,0.15);color:#10b981;">
+            <i class="bi bi-graph-up-arrow"></i>
+          </div>
+          <div class="stat-label">Gross Profit</div>
+          <div class="stat-value" id="stat-profit">₱0.00</div>
+          <div class="mini-muted" id="stat-margin">0% margin</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:rgba(245,158,11,0.15);color:#f59e0b;">
+            <i class="bi bi-tags"></i>
+          </div>
+          <div class="stat-label">Discounts Given</div>
+          <div class="stat-value" id="stat-discount">₱0.00</div>
+          <div class="mini-muted">total discounts</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:rgba(59,130,246,0.15);color:#3b82f6;">
+            <i class="bi bi-receipt-cutoff"></i>
+          </div>
+          <div class="stat-label">VAT Collected</div>
+          <div class="stat-value" id="stat-vat">₱0.00</div>
+          <div class="mini-muted">12% VAT</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-3">
+      <!-- Top Products -->
+      <div class="col-12 col-lg-7">
+        <div class="card">
+          <div class="section-header mb-3">
+            <div class="section-heading"><i class="bi bi-trophy me-2" style="color:var(--warning);"></i>Top Products</div>
+          </div>
+          <div id="top-products-list">
+            <div class="empty-state py-4"><i class="bi bi-inbox" style="font-size:32px;"></i><div>No data</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Payment Breakdown -->
+      <div class="col-12 col-lg-5">
+        <div class="card">
+          <div class="section-heading mb-3"><i class="bi bi-credit-card me-2" style="color:var(--accent);"></i>Payment Methods</div>
+          <div id="payment-breakdown">
+            <div class="empty-state py-4"><i class="bi bi-inbox" style="font-size:32px;"></i><div>No data</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Store Comparison (admin only) -->
+      <div class="col-12" id="store-comparison-section" style="display:none;">
+        <div class="card">
+          <div class="section-heading mb-3"><i class="bi bi-shop me-2" style="color:var(--success);"></i>All Stores Summary</div>
+          <div class="table-responsive">
+            <table class="table table-sm mb-0">
+              <thead>
+                <tr>
+                  <th>Store</th>
+                  <th class="text-end">Transactions</th>
+                  <th class="text-end">Revenue</th>
+                  <th class="text-end">VAT</th>
+                </tr>
+              </thead>
+              <tbody id="store-summary-tbody">
+                <tr><td colspan="4" class="text-center py-3 text-muted">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Sales -->
+      <div class="col-12">
+        <div class="card">
+          <div class="section-header mb-3">
+            <div class="section-heading"><i class="bi bi-clock-history me-2" style="color:var(--info);"></i>Recent Transactions</div>
+            <a href="sales.html" class="btn btn-secondary btn-sm">View All</a>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm mb-0">
+              <thead>
+                <tr>
+                  <th>TXN No.</th>
+                  <th>Date/Time</th>
+                  <th>Cashier</th>
+                  <th class="text-end">Total</th>
+                  <th>Payment</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="recent-sales-tbody">
+                <tr><td colspan="6" class="text-center py-3 text-muted">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Loading & Toast -->
+<div id="loading-overlay" class="d-none">
+  <div class="loading-spinner">
+    <div class="spinner-border mb-3"></div>
+    <div class="loading-text">Loading...</div>
+  </div>
+</div>
+<div id="toast-container"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script type="module">
+import auth from './src/js/auth.js';
+import rbac from './src/js/rbac.js';
+import reports from './src/js/reports.js';
+import { formatPeso, formatDate, showToast, getLastNDays, getCurrentMonthRange } from './src/js/utils.js';
+import db from './src/js/supabaseClient.js';
+
+window.handleLogout = () => auth.logout();
+window.goHomePage = () => {
+  window.location.href = 'index.html';
+};
+window.goBackPage = () => {
+  if (window.history.length > 1) window.history.back();
+  else goHomePage();
+};
+window.toggleSidebar = () => {
+  document.getElementById('sidebar').classList.toggle('show');
+  document.getElementById('sidebar-overlay').classList.toggle('show');
+};
+
+let realtimeChannel = null;
+let realtimeReloadTimer = null;
+
+// DateTime display
+function updateClock() {
+  document.getElementById('current-datetime').textContent =
+    new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila', weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+async function init() {
+  const session = await auth.init();
+  if (!session) { window.location.href = 'login.html'; return; }
+  if (!auth.hasRole('admin')) { window.location.href = auth.hasRole('cashier') ? 'pos.html' : 'inventory.html'; return; }
+  rbac.updateUI();
+  document.querySelectorAll('[data-user-name]').forEach(el => el.textContent = auth.currentProfile?.full_name || '');
+  document.querySelectorAll('[data-user-role]').forEach(el => el.textContent = auth.currentProfile?.role || '');
+  const av = document.getElementById('user-avatar-letter');
+  if (av) av.textContent = (auth.currentProfile?.full_name || 'U')[0].toUpperCase();
+
+  // Set default date range (today)
+  setRange('today', false);
+  await loadDashboard();
+
+  if (auth.hasRole('admin')) {
+    document.getElementById('store-comparison-section').style.display = '';
+    await loadStoreComparison();
+  }
+
+  setupRealtime();
+}
+
+window.setRange = function(range, reload = true) {
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+  if (range === 'today') {
+    document.getElementById('date-from').value = today;
+    document.getElementById('date-to').value = today;
+  } else if (range === 'week') {
+    const r = getLastNDays(7);
+    document.getElementById('date-from').value = r.first;
+    document.getElementById('date-to').value = r.last;
+  } else if (range === 'month') {
+    const r = getCurrentMonthRange();
+    document.getElementById('date-from').value = r.first;
+    document.getElementById('date-to').value = r.last;
+  }
+  if (reload) loadDashboard();
+};
+
+window.loadDashboard = async function() {
+  const storeId = auth.currentStore?.id;
+  const dateFrom = document.getElementById('date-from').value;
+  const dateTo = document.getElementById('date-to').value;
+  if (!storeId || !dateFrom || !dateTo) return;
+
+  try {
+    const [{ summary }, topProds, payBreakdown, recentSales] = await Promise.all([
+      reports.getSalesSummary(storeId, dateFrom, dateTo),
+      reports.getTopProducts(storeId, dateFrom, dateTo, 5),
+      reports.getPaymentBreakdown(storeId, dateFrom, dateTo),
+      getRecentSales(storeId, dateFrom, dateTo)
+    ]);
+
+    // Stats
+    document.getElementById('stat-sales').textContent = formatPeso(summary.totalRevenue);
+    document.getElementById('stat-txns').textContent = summary.totalTransactions + ' transactions';
+    document.getElementById('stat-profit').textContent = formatPeso(summary.grossProfit);
+    document.getElementById('stat-margin').textContent = summary.grossMargin.toFixed(1) + '% margin';
+    document.getElementById('stat-discount').textContent = formatPeso(summary.totalDiscount);
+    document.getElementById('stat-vat').textContent = formatPeso(summary.totalVat);
+
+    // Top Products
+    renderTopProducts(topProds);
+    renderPaymentBreakdown(payBreakdown);
+    renderRecentSales(recentSales);
+
+    // Low stock check
+    await checkLowStock(storeId);
+  } catch (err) {
+    showToast('Error loading dashboard: ' + err.message, 'danger');
+  }
+};
+
+async function getRecentSales(storeId, dateFrom, dateTo) {
+  const { data } = await db.from('sales')
+    .select('txn_no, created_at, total, payment_json, status, profiles(full_name)')
+    .eq('store_id', storeId)
+    .gte('created_at', dateFrom + 'T00:00:00')
+    .lte('created_at', dateTo + 'T23:59:59')
+    .order('created_at', { ascending: false })
+    .limit(10);
+  return data || [];
+}
+
+async function checkLowStock(storeId) {
+  const { data: lowItems } = await db.from('store_products')
+    .select('id, stock, reorder_level')
+    .eq('store_id', storeId);
+
+  const lowCount = (lowItems || []).filter(i => i.stock <= i.reorder_level).length;
+
+  if (lowCount > 0) {
+    document.getElementById('low-stock-banner').classList.remove('d-none');
+    document.getElementById('low-stock-text').textContent = `${lowCount} product(s) are low on stock or out of stock.`;
+  } else {
+    document.getElementById('low-stock-banner').classList.add('d-none');
+  }
+}
+
+async function loadStoreComparison() {
+  const dateFrom = document.getElementById('date-from').value;
+  const dateTo = document.getElementById('date-to').value;
+
+  const { data: stores } = await db.from('stores').select('id, name, code');
+  const tbody = document.getElementById('store-summary-tbody');
+  tbody.innerHTML = '';
+
+  for (const store of (stores || [])) {
+    const { data: sales } = await db.from('sales')
+      .select('total, vat_amount')
+      .eq('store_id', store.id)
+      .eq('status', 'completed')
+      .gte('created_at', dateFrom + 'T00:00:00')
+      .lte('created_at', dateTo + 'T23:59:59');
+
+    const rev = (sales || []).reduce((s, r) => s + r.total, 0);
+    const vat = (sales || []).reduce((s, r) => s + r.vat_amount, 0);
+    tbody.innerHTML += `
+      <tr>
+        <td><span class="badge bg-secondary me-2">${store.code}</span>${store.name}</td>
+        <td class="text-end">${(sales || []).length}</td>
+        <td class="text-end fw-bold">${formatPeso(rev)}</td>
+        <td class="text-end">${formatPeso(vat)}</td>
+      </tr>`;
+  }
+}
+
+function scheduleDashboardRealtimeRefresh() {
+  clearTimeout(realtimeReloadTimer);
+  realtimeReloadTimer = setTimeout(async () => {
+    await loadDashboard();
+    if (auth.hasRole('admin')) await loadStoreComparison();
+  }, 350);
+}
+
+function setupRealtime() {
+  if (!auth.currentStore?.id) return;
+  if (realtimeChannel) db.removeChannel(realtimeChannel);
+
+  realtimeChannel = db.channel(`dashboard-live-${auth.currentStore.id}`);
+
+  realtimeChannel.on(
+    'postgres_changes',
+    { event: '*', schema: 'public', table: 'sales', filter: `store_id=eq.${auth.currentStore.id}` },
+    scheduleDashboardRealtimeRefresh
+  );
+
+  realtimeChannel.on(
+    'postgres_changes',
+    { event: '*', schema: 'public', table: 'store_products', filter: `store_id=eq.${auth.currentStore.id}` },
+    scheduleDashboardRealtimeRefresh
+  );
+
+  if (auth.hasRole('admin')) {
+    realtimeChannel.on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'sales' },
+      scheduleDashboardRealtimeRefresh
+    );
+  }
+
+  realtimeChannel.subscribe();
+}
+
+window.addEventListener('beforeunload', () => {
+  if (realtimeChannel) db.removeChannel(realtimeChannel);
+});
+
+function renderTopProducts(prods) {
+  const el = document.getElementById('top-products-list');
+  if (!prods.length) { el.innerHTML = '<div class="text-center py-3" style="color:var(--text-muted);">No data for selected period</div>'; return; }
+  const max = Math.max(...prods.map(p => p.revenue));
+  el.innerHTML = prods.map((p, i) => `
+    <div class="d-flex align-items-center gap-3 mb-3">
+      <div style="width:24px;text-align:center;font-weight:700;color:var(--text-muted);font-size:13px;">#${i+1}</div>
+      <div style="flex:1;">
+        <div style="font-size:13px;font-weight:600;">${p.name}</div>
+        <div style="font-size:11px;color:var(--text-muted);">Qty: ${p.qty}</div>
+        <div style="height:4px;background:var(--border);border-radius:2px;margin-top:4px;">
+          <div style="height:100%;width:${(p.revenue/max*100).toFixed(0)}%;background:var(--accent);border-radius:2px;"></div>
+        </div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-weight:700;font-size:13px;">${formatPeso(p.revenue)}</div>
+        <div style="font-size:11px;color:var(--success);">+${formatPeso(p.profit)}</div>
+      </div>
+    </div>`).join('');
+}
+
+function renderPaymentBreakdown(payments) {
+  const el = document.getElementById('payment-breakdown');
+  if (!payments.length) { el.innerHTML = '<div class="text-center py-3" style="color:var(--text-muted);">No data</div>'; return; }
+  const icons = { cash: '💵', gcash: '📱', maya: '🔵', card: '💳' };
+  const total = payments.reduce((s, p) => s + p.amount, 0);
+  el.innerHTML = payments.map(p => `
+    <div class="d-flex align-items-center gap-3 mb-3">
+      <div style="font-size:20px;">${icons[p.method] || '💰'}</div>
+      <div style="flex:1;">
+        <div style="font-size:13px;font-weight:600;text-transform:capitalize;">${p.method}</div>
+        <div style="font-size:11px;color:var(--text-muted);">${p.count} transactions</div>
+        <div style="height:4px;background:var(--border);border-radius:2px;margin-top:4px;">
+          <div style="height:100%;width:${(p.amount/total*100).toFixed(0)}%;background:var(--accent);border-radius:2px;"></div>
+        </div>
+      </div>
+      <div style="font-weight:700;font-size:13px;">${formatPeso(p.amount)}</div>
+    </div>`).join('');
+}
+
+function renderRecentSales(sales) {
+  const tbody = document.getElementById('recent-sales-tbody');
+  if (!sales.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4" style="color:var(--text-muted);">No transactions found</td></tr>';
+    return;
+  }
+  const payIcons = { cash: '💵', gcash: '📱', maya: '🔵', card: '💳' };
+  tbody.innerHTML = sales.map(s => {
+    const payments = Array.isArray(s.payment_json) ? s.payment_json : [];
+    const payDisplay = payments.map(p => `${payIcons[p.method]||''} ${p.method}`).join(', ');
+    return `<tr>
+      <td><a href="sales.html?txn=${s.txn_no}" style="color:var(--accent);text-decoration:none;">${s.txn_no}</a></td>
+      <td style="font-size:12px;">${formatDate(s.created_at, true)}</td>
+      <td style="font-size:12px;">${s.profiles?.full_name || 'N/A'}</td>
+      <td class="text-end fw-bold">${formatPeso(s.total)}</td>
+      <td style="font-size:12px;">${payDisplay}</td>
+      <td><span class="badge status-${s.status}">${s.status}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+init();
+</script>
+</body>
+</html>
