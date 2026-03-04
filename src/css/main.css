@@ -980,6 +980,15 @@ body {
     max-width: 100% !important;
   }
 
+  .page-content .form-control[style*="width"],
+  .page-content .form-select[style*="width"],
+  .page-content input[style*="width"],
+  .page-content select[style*="width"],
+  .page-content textarea[style*="width"] {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
   #daily-chart,
   #category-chart {
     width: 100% !important;
@@ -1095,9 +1104,6 @@ body {
 .col-12 { width: 100%; }
 .col-6 { width: 50%; }
 .col-4 { width: 33.333%; }
-.col-md-4 { width: 33.333%; }
-.col-md-6 { width: 50%; }
-.col-md-8 { width: 66.666%; }
 
 /* HR */
 hr { border-color: var(--line); margin: 12px 0; opacity: 1; }
