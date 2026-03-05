@@ -8,11 +8,14 @@ export const auth = {
   currentStore: null,
   userStores: [],
 
+  // ── Valid roles ────────────────────────────────────────────────────────────
+  VALID_ROLES: ['admin', 'staff', 'cashier'],
+
   resetState() {
-    this.currentUser = null;
+    this.currentUser    = null;
     this.currentProfile = null;
-    this.currentStore = null;
-    this.userStores = [];
+    this.currentStore   = null;
+    this.userStores     = [];
   },
 
   clearPersistedAuthStorage() {
@@ -40,7 +43,6 @@ export const auth = {
   async init() {
     const { data: { session }, error } = await db.auth.getSession();
     if (error) {
-      // not fatal, but good to know
       console.warn('getSession error:', error.message);
     }
 
@@ -81,22 +83,28 @@ export const auth = {
     if (pErr) {
       console.warn('loadProfile profiles error:', pErr.message);
       this.currentProfile = null;
-      this.currentStore = null;
-      this.userStores = [];
+      this.currentStore   = null;
+      this.userStores     = [];
       return;
     }
 
+    // Reject inactive accounts
     if (profile?.is_active === false) {
       this.currentProfile = null;
-      this.currentStore = null;
-      this.userStores = [];
+      this.currentStore   = null;
+      this.userStores     = [];
       return;
     }
 
-    // Normalize legacy 'manager' role → 'staff' (client-side fallback
-    // until the SQL patch migrates the DB column).
+    // Normalise legacy 'manager' → 'staff'
     if (profile && profile.role === 'manager') {
       profile.role = 'staff';
+    }
+
+    // Reject any unknown role (safety net)
+    if (profile && !this.VALID_ROLES.includes(profile.role)) {
+      console.warn('Unknown role detected:', profile.role, '→ forcing cashier');
+      profile.role = 'cashier';
     }
 
     this.currentProfile = profile;
@@ -107,7 +115,6 @@ export const auth = {
         .from('stores')
         .select('*')
         .order('name');
-
       if (sErr) console.warn('stores load error:', sErr.message);
       this.userStores = stores || [];
     } else {
@@ -115,12 +122,11 @@ export const auth = {
         .from('user_store_access')
         .select('store_id, stores(*)')
         .eq('user_id', this.currentUser.id);
-
       if (aErr) console.warn('user_store_access error:', aErr.message);
       this.userStores = access?.map(a => a.stores).filter(Boolean) || [];
     }
 
-    // 3) Restore last selected store (safe compare)
+    // 3) Restore last selected store
     const savedStoreId = (localStorage.getItem('pos_store_id') || '').trim();
     if (savedStoreId) {
       this.currentStore =
@@ -145,11 +151,11 @@ export const auth = {
 
       if (!this.currentProfile) {
         await this.forceLocalSignOut();
-        return { success: false, error: 'Profile not found. Please contact admin.' };
+        return { success: false, error: 'Account not found or inactive. Please contact admin.' };
       }
 
       await this.logAction('login', null, null, null, { email });
-      return { success: true };
+      return { success: true, role: this.currentProfile.role };
     } catch (err) {
       return { success: false, error: err.message };
     } finally {
@@ -179,12 +185,22 @@ export const auth = {
     return !!this.currentUser && !!this.currentProfile;
   },
 
+  /**
+   * Returns the current user's role.
+   * Always normalises 'manager' → 'staff' for legacy safety.
+   */
+  getRole() {
+    const role = this.currentProfile?.role;
+    if (role === 'manager') return 'staff';
+    return role || null;
+  },
+
+  /**
+   * Returns true if the current user's role is one of the given roles.
+   * @param {...string} roles
+   */
   hasRole(...roles) {
-    // Treat legacy 'manager' as 'staff' for backwards compatibility.
-    const role = this.currentProfile?.role === 'manager'
-      ? 'staff'
-      : this.currentProfile?.role;
-    return roles.includes(role);
+    return roles.includes(this.getRole());
   },
 
   requireAuth(redirectTo = 'login.html') {
@@ -195,16 +211,37 @@ export const auth = {
     return true;
   },
 
-  requireRole(roles, redirectTo = 'dashboard.html') {
+  /**
+   * Guard: redirect away if the user does not have one of the allowed roles.
+   * Also shows an explanatory toast.
+   *
+   * @param {string|string[]} roles   - allowed role(s)
+   * @param {string}          redirectTo - fallback URL (defaults to role home)
+   */
+  requireRole(roles, redirectTo = null) {
     if (!this.requireAuth()) return false;
 
     const allowed = Array.isArray(roles) ? roles : [roles];
     if (!this.hasRole(...allowed)) {
+      const homeUrl = this._roleHomeUrl();
       showToast('You do not have permission to access this page.', 'danger');
-      setTimeout(() => (window.location.href = redirectTo), 1200);
+      setTimeout(() => {
+        window.location.href = redirectTo || homeUrl;
+      }, 1200);
       return false;
     }
     return true;
+  },
+
+  /**
+   * The canonical home page URL for the current user's role.
+   * Used internally; prefer rbac.getHomeUrl() for external callers.
+   */
+  _roleHomeUrl() {
+    const role = this.getRole();
+    if (role === 'admin')   return 'dashboard.html';
+    if (role === 'cashier') return 'pos.html';
+    return 'inventory.html'; // staff
   },
 
   selectStore(storeId) {
@@ -216,16 +253,16 @@ export const auth = {
   async logAction(action, entityType = null, entityId = null, oldVals = null, newVals = null) {
     try {
       await db.from('audit_logs').insert({
-        user_id: this.currentUser?.id || null,
-        store_id: this.currentStore?.id || null,
+        user_id:     this.currentUser?.id  || null,
+        store_id:    this.currentStore?.id || null,
         action,
         entity_type: entityType,
-        entity_id: entityId,
-        old_values: oldVals,
-        new_values: newVals
+        entity_id:   entityId,
+        old_values:  oldVals,
+        new_values:  newVals
       });
-    } catch (e) {
-      // silent fail for audit
+    } catch (_) {
+      // silent – audit must never break the main flow
     }
   }
 };
