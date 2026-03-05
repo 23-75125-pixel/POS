@@ -31,9 +31,9 @@ export const PERMISSIONS = {
   'inventory.view_cost': ['admin', 'staff'],
 
   // Reports
-  'reports.view_store': ['admin'],
+  'reports.view_store': ['admin', 'staff'],
   'reports.view_all': ['admin'],
-  'reports.export': ['admin'],
+  'reports.export': ['admin', 'staff'],
 
   // Users
   'users.manage': ['admin'],
@@ -51,6 +51,73 @@ export const rbac = {
 
   cannot(permission) {
     return !this.can(permission);
+  },
+
+  /**
+   * Returns the appropriate home URL for the current user's role.
+   */
+  getHomeUrl() {
+    const role = auth.currentProfile?.role;
+    if (role === 'admin') return 'dashboard.html';
+    if (role === 'cashier') return 'pos.html';
+    return 'inventory.html'; // staff
+  },
+
+  /**
+   * Show a full-screen access-denied overlay WITHOUT navigating away.
+   * Call this instead of window.location.href when blocking page access.
+   */
+  blockPage() {
+    const role = auth.currentProfile?.role || 'unknown';
+    const roleLabel = { admin: 'Administrator', staff: 'Staff', cashier: 'Cashier' }[role] || role;
+    const accessPages = {
+      admin: 'All pages',
+      staff: 'Inventory, Sales History, Reports, Products',
+      cashier: 'Point of Sale',
+    };
+    const pages = accessPages[role] || 'None';
+    const homeUrl = this.getHomeUrl();
+
+    // Prevent background scrolling
+    document.body.style.overflow = 'hidden';
+
+    // Remove any existing overlay to avoid duplicates
+    const existing = document.getElementById('rbac-access-denied');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'rbac-access-denied';
+    overlay.style.cssText =
+      'position:fixed;inset:0;z-index:99999;background:#0f172a;display:flex;' +
+      'align-items:center;justify-content:center;padding:20px;';
+    overlay.innerHTML = `
+      <div style="text-align:center;max-width:440px;background:#1e293b;border:1px solid #334155;
+                  border-radius:16px;padding:44px 40px;box-shadow:0 25px 60px rgba(0,0,0,0.5);">
+        <div style="font-size:52px;margin-bottom:16px;">🔒</div>
+        <h3 style="color:#f1f5f9;margin-bottom:8px;font-size:22px;font-weight:700;">Access Restricted</h3>
+        <p style="color:#94a3b8;margin-bottom:4px;">
+          Your role: <strong style="color:#e2e8f0;">${roleLabel}</strong>
+        </p>
+        <p style="color:#94a3b8;margin-bottom:20px;">This page is not available for your account.</p>
+        <p style="color:#64748b;font-size:13px;margin-bottom:28px;line-height:1.6;">
+          You can access: <strong style="color:#cbd5e1;">${pages}</strong>
+        </p>
+        <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+          <a href="${homeUrl}"
+             style="padding:9px 22px;background:#3b82f6;color:#fff;border-radius:8px;
+                    text-decoration:none;font-weight:600;font-size:14px;">
+            <span>&#8962;</span> Go to My Home
+          </a>
+          <button id="rbac-signout-btn"
+                  style="padding:9px 22px;background:#1e293b;color:#cbd5e1;border:1px solid #475569;
+                         border-radius:8px;cursor:pointer;font-weight:600;font-size:14px;">
+            Sign Out
+          </button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    document.getElementById('rbac-signout-btn').addEventListener('click', () => auth.logout());
   },
 
   /**
@@ -81,7 +148,7 @@ export const rbac = {
     nameEls.forEach(el => el.textContent = auth.currentProfile?.full_name || 'User');
 
     const roleEls = document.querySelectorAll('[data-user-role]');
-    const roleLabels = { admin: 'Administrator', manager: 'Staff', staff: 'Staff', cashier: 'Cashier' };
+    const roleLabels = { admin: 'Administrator', staff: 'Staff', cashier: 'Cashier' };
     roleEls.forEach(el => el.textContent = roleLabels[auth.currentProfile?.role] || 'User');
 
     const storeEls = document.querySelectorAll('[data-current-store]');
