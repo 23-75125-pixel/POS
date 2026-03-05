@@ -144,6 +144,16 @@
       display: none;
       margin-bottom: 16px;
     }
+    .info-msg {
+      background: rgba(99,102,241,0.08);
+      border: 1px solid rgba(99,102,241,0.25);
+      color: var(--text-secondary);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13px;
+      display: none;
+      margin-bottom: 16px;
+    }
     .form-group { margin-bottom: 18px; }
     .show-pass-toggle {
       cursor: pointer;
@@ -206,6 +216,11 @@
     <div class="alert alert-success" id="logout-msg" style="display:none; font-size:13px; padding:10px 14px; margin-bottom:16px;">
       <i class="bi bi-check-circle me-2"></i>
       <span>You have logged out successfully.</span>
+    </div>
+
+    <div class="info-msg" id="info-msg" style="display:none;">
+      <i class="bi bi-info-circle me-2"></i>
+      <span></span>
     </div>
 
     <div class="form-group">
@@ -271,13 +286,16 @@
     }
 
     (async function handleExistingSession() {
-      const params = new URLSearchParams(window.location.search);
-      const fromLogout = params.get('logged_out') === '1';
+      const params      = new URLSearchParams(window.location.search);
+      const fromLogout  = params.get('logged_out') === '1';
 
       if (fromLogout) {
+        // Sign out any lingering local session
         try { await db.auth.signOut({ scope: 'local' }); } catch (_) {}
         clearPersistedAuthStorage();
         localStorage.removeItem('pos_store_id');
+        // Store the flag in sessionStorage BEFORE replaceState removes URL params
+        sessionStorage.setItem('pos_logout_success', '1');
         window.history.replaceState({}, '', 'login.html');
         return;
       }
@@ -287,17 +305,19 @@
 
       const ok = await validateSessionUser(session.user.id);
       if (!ok) {
+        // Invalid / inactive user — clear silently
         try { await db.auth.signOut({ scope: 'local' }); } catch (_) {}
         clearPersistedAuthStorage();
         localStorage.removeItem('pos_store_id');
         return;
       }
 
-      // Prevent automatic login redirect: keep user on login page until explicit sign-in.
+      // Valid existing session found — sign out and show a neutral info notice
+      // (we require explicit re-login every time for security).
       try { await db.auth.signOut({ scope: 'local' }); } catch (_) {}
       clearPersistedAuthStorage();
       localStorage.removeItem('pos_store_id');
-      showError('Please sign in to continue.');
+      showInfo('Session expired. Please sign in again to continue.');
     })();
 
     document.getElementById('toggle-pass').addEventListener('click', () => {
@@ -387,19 +407,33 @@
     }
 
     function showError(msg) {
-      const errBox = document.getElementById('error-msg');
-      document.getElementById('error-text').textContent = msg;
-      errBox.style.display = 'block';
+      const errBox   = document.getElementById('error-msg');
+      const infoBox  = document.getElementById('info-msg');
       const logoutBox = document.getElementById('logout-msg');
+      document.getElementById('error-text').textContent = msg;
+      errBox.style.display  = 'block';
+      if (infoBox)   infoBox.style.display   = 'none';
+      if (logoutBox) logoutBox.style.display = 'none';
+    }
+
+    function showInfo(msg) {
+      const infoBox  = document.getElementById('info-msg');
+      const errBox   = document.getElementById('error-msg');
+      const logoutBox = document.getElementById('logout-msg');
+      if (!infoBox) { return; } // fallback — do nothing silently
+      infoBox.querySelector('span').textContent = msg;
+      infoBox.style.display  = 'block';
+      errBox.style.display   = 'none';
       if (logoutBox) logoutBox.style.display = 'none';
     }
 
     function showLogoutSuccessIfNeeded() {
-      const params = new URLSearchParams(window.location.search);
       const logoutBox = document.getElementById('logout-msg');
       if (!logoutBox) return;
 
-      if (params.get('logged_out') === '1') {
+      // Use sessionStorage flag (URL params are already removed by replaceState)
+      if (sessionStorage.getItem('pos_logout_success') === '1') {
+        sessionStorage.removeItem('pos_logout_success');
         logoutBox.style.display = 'block';
       }
     }

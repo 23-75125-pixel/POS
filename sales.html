@@ -447,8 +447,8 @@ window.exportSales = function() {
   exportToCSV(rows, `sales_${auth.currentStore?.code || ''}_${new Date().toISOString().split('T')[0]}`);
 };
 
-// expose rbac for inline use
-window.rbac = { can: (p) => ['admin'].includes(auth.currentProfile?.role) };
+// expose full rbac module for any inline handlers
+window.rbac = rbac;
 
 init();
 </script>
