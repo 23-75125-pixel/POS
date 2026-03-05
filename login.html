@@ -374,7 +374,9 @@
 
     async function redirectByRole(userId) {
       const { data: profile } = await db.from('profiles').select('role').eq('id', userId).single();
-      const role = profile?.role;
+      const rawRole = profile?.role;
+      // Normalize legacy 'manager' role → 'staff'
+      const role = rawRole === 'manager' ? 'staff' : rawRole;
       if (role === 'cashier') {
         window.location.href = 'pos.html';
       } else if (role === 'staff') {

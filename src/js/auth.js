@@ -93,6 +93,12 @@ export const auth = {
       return;
     }
 
+    // Normalize legacy 'manager' role → 'staff' (client-side fallback
+    // until the SQL patch migrates the DB column).
+    if (profile && profile.role === 'manager') {
+      profile.role = 'staff';
+    }
+
     this.currentProfile = profile;
 
     // 2) Load accessible stores
@@ -174,7 +180,11 @@ export const auth = {
   },
 
   hasRole(...roles) {
-    return roles.includes(this.currentProfile?.role);
+    // Treat legacy 'manager' as 'staff' for backwards compatibility.
+    const role = this.currentProfile?.role === 'manager'
+      ? 'staff'
+      : this.currentProfile?.role;
+    return roles.includes(role);
   },
 
   requireAuth(redirectTo = 'login.html') {
