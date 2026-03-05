@@ -125,17 +125,67 @@ export const rbac = {
    * Add data-permission="permission.name" to elements
    */
   applyPermissions() {
+    // Helper: lock a nav-item link (visible but not clickable, shows lock icon)
+    function lockNavItem(el) {
+      el.classList.add('nav-locked');
+      // Save original href so we can restore if role changes without reload
+      if (!el.dataset.origHref && el.getAttribute('href')) {
+        el.dataset.origHref = el.getAttribute('href');
+      }
+      el.setAttribute('href', '#');
+      el.setAttribute('tabindex', '-1');
+      el.setAttribute('aria-disabled', 'true');
+      // Add lock icon once
+      if (!el.querySelector('.nav-lock-icon')) {
+        const lock = document.createElement('i');
+        lock.className = 'bi bi-lock-fill nav-lock-icon';
+        el.appendChild(lock);
+      }
+    }
+
+    // Helper: unlock a nav-item link
+    function unlockNavItem(el) {
+      el.classList.remove('nav-locked');
+      el.removeAttribute('aria-disabled');
+      el.removeAttribute('tabindex');
+      if (el.dataset.origHref) {
+        el.setAttribute('href', el.dataset.origHref);
+        delete el.dataset.origHref;
+      }
+      const lock = el.querySelector('.nav-lock-icon');
+      if (lock) lock.remove();
+    }
+
     document.querySelectorAll('[data-permission]').forEach(el => {
       const perm = el.dataset.permission;
-      if (!this.can(perm)) {
-        el.style.display = 'none';
+      const allowed = this.can(perm);
+      // Section labels: always show — they act as group separators
+      if (el.classList.contains('nav-section-label')) {
+        el.style.display = '';
+        return;
+      }
+      // Nav link/button: lock or unlock instead of hide/show
+      if (el.classList.contains('nav-item')) {
+        if (!allowed) lockNavItem(el); else unlockNavItem(el);
+      } else {
+        // Any other element (e.g. action buttons, table columns) — hide
+        el.style.display = allowed ? '' : 'none';
       }
     });
 
     document.querySelectorAll('[data-role]').forEach(el => {
       const roles = el.dataset.role.split(',').map(r => r.trim());
-      if (!roles.includes(auth.currentProfile?.role)) {
-        el.style.display = 'none';
+      const allowed = roles.includes(auth.currentProfile?.role);
+      // Section labels: always show
+      if (el.classList.contains('nav-section-label')) {
+        el.style.display = '';
+        return;
+      }
+      // Nav link/button: lock or unlock
+      if (el.classList.contains('nav-item')) {
+        if (!allowed) lockNavItem(el); else unlockNavItem(el);
+      } else {
+        el.style.display = allowed ? '' : 'none';
       }
     });
   },
